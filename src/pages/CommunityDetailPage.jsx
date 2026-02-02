@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowLeft, Users, Copy, Settings, Send, Flame, Trophy,
-  CheckCircle2, Shield, Crown, MoreVertical, UserMinus, LogOut, X
+  ArrowLeft, Users, Copy, Send, Flame, Trophy,
+  CheckCircle2, Shield, Crown, MoreVertical, UserMinus, LogOut, X,
+  Bell, Target, Play, Award
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
@@ -34,7 +35,7 @@ export default function CommunityDetailPage() {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages])
+  }, [messages, activeTab])
 
   const loadCommunity = () => {
     const comm = localStore.getOne(TABLES.COMMUNITIES, id)
@@ -98,7 +99,9 @@ export default function CommunityDetailPage() {
   }
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
   }
 
   const handleSendMessage = (e) => {
@@ -138,7 +141,7 @@ export default function CommunityDetailPage() {
       community_id: id,
       user_id: user.id,
       content: `${profile?.username || 'Someone'} left the community`,
-      message_type: 'achievement'
+      message_type: 'system'
     })
 
     toast.success('Left community')
@@ -159,23 +162,35 @@ export default function CommunityDetailPage() {
     navigate('/community')
   }
 
+  // Get activity icon based on message type
+  const getActivityIcon = (type) => {
+    switch (type) {
+      case 'quest_created': return <Target className="w-4 h-4 text-blue-400" />
+      case 'quest_started': return <Play className="w-4 h-4 text-yellow-400" />
+      case 'quest_completed': return <CheckCircle2 className="w-4 h-4 text-green-400" />
+      case 'streak': return <Flame className="w-4 h-4 text-orange-400" />
+      case 'rank_up': return <Award className="w-4 h-4 text-purple-400" />
+      default: return <Bell className="w-4 h-4 text-primary-400" />
+    }
+  }
+
   if (loading || !community) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-dark-bg">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <header className="bg-dark-surface border-b border-dark-border px-4 py-4 pt-safe-top">
+    <div className="fixed inset-0 flex flex-col bg-dark-bg">
+      {/* Header - Fixed at top */}
+      <header className="shrink-0 bg-dark-surface border-b border-dark-border px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/community')}
-              className="text-dark-muted hover:text-white"
+              className="text-dark-muted hover:text-white p-1"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
@@ -184,17 +199,17 @@ export default function CommunityDetailPage() {
               <p className="text-xs text-dark-muted">{members.length} members</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <button
               onClick={handleCopyInviteCode}
-              className="btn-icon text-dark-muted hover:text-white"
+              className="p-2 text-dark-muted hover:text-white hover:bg-dark-border rounded-lg transition-all"
               title="Copy invite code"
             >
               <Copy className="w-5 h-5" />
             </button>
             <button
               onClick={() => setShowSettings(true)}
-              className="btn-icon text-dark-muted hover:text-white"
+              className="p-2 text-dark-muted hover:text-white hover:bg-dark-border rounded-lg transition-all"
             >
               <MoreVertical className="w-5 h-5" />
             </button>
@@ -202,17 +217,28 @@ export default function CommunityDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mt-4">
+        <div className="flex gap-2 mt-3">
           <button
             onClick={() => setActiveTab('chat')}
             className={cn(
               "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
               activeTab === 'chat'
                 ? "bg-primary-500/20 text-primary-400"
-                : "bg-dark-border/50 text-dark-muted"
+                : "bg-dark-border/50 text-dark-muted hover:text-white"
             )}
           >
             Chat
+          </button>
+          <button
+            onClick={() => setActiveTab('activity')}
+            className={cn(
+              "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
+              activeTab === 'activity'
+                ? "bg-primary-500/20 text-primary-400"
+                : "bg-dark-border/50 text-dark-muted hover:text-white"
+            )}
+          >
+            Activity
           </button>
           <button
             onClick={() => setActiveTab('members')}
@@ -220,7 +246,7 @@ export default function CommunityDetailPage() {
               "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
               activeTab === 'members'
                 ? "bg-primary-500/20 text-primary-400"
-                : "bg-dark-border/50 text-dark-muted"
+                : "bg-dark-border/50 text-dark-muted hover:text-white"
             )}
           >
             Members
@@ -228,21 +254,24 @@ export default function CommunityDetailPage() {
         </div>
       </header>
 
-      {/* Content */}
-      <main className="flex-1 overflow-hidden">
-        {activeTab === 'chat' ? (
-          <div className="h-full flex flex-col">
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((message, index) => {
+      {/* Content - Scrollable middle section */}
+      {activeTab === 'chat' && (
+        <>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-dark-muted">No messages yet. Say hi! 👋</p>
+              </div>
+            ) : (
+              messages.filter(m => m.message_type === 'text' || m.message_type === 'system').map((message) => {
                 const isOwn = message.user_id === user.id
                 const senderProfile = memberProfiles[message.user_id]
-                const isSystem = message.message_type === 'achievement'
+                const isSystem = message.message_type === 'system'
 
                 if (isSystem) {
                   return (
-                    <div key={message.id} className="text-center">
-                      <span className="text-xs text-dark-muted bg-dark-surface px-3 py-1 rounded-full">
+                    <div key={message.id} className="text-center py-2">
+                      <span className="text-xs text-dark-muted bg-dark-surface/50 px-3 py-1.5 rounded-full">
                         {message.content}
                       </span>
                     </div>
@@ -258,203 +287,263 @@ export default function CommunityDetailPage() {
                   >
                     <div className={cn(
                       "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                      isOwn ? "bg-primary-500/20" : "bg-dark-surface"
+                      isOwn ? "bg-primary-500" : "bg-dark-surface"
                     )}>
                       <span className={cn(
                         "text-sm font-medium",
-                        isOwn ? "text-primary-400" : "text-dark-muted"
+                        isOwn ? "text-white" : "text-dark-muted"
                       )}>
                         {(senderProfile?.username || 'U')[0].toUpperCase()}
                       </span>
                     </div>
-                    <div className={cn("max-w-[70%]", isOwn && "text-right")}>
+                    <div className={cn("max-w-[75%]", isOwn && "text-right")}>
                       {!isOwn && (
-                        <p className="text-xs text-dark-muted mb-1">
+                        <p className="text-xs text-dark-muted mb-1 ml-1">
                           {senderProfile?.username || 'Unknown'}
                         </p>
                       )}
                       <div className={cn(
-                        "px-3 py-2 rounded-2xl",
+                        "px-4 py-2.5 rounded-2xl inline-block text-left",
                         isOwn
-                          ? "bg-primary-500 text-white rounded-br-md"
-                          : "bg-dark-surface text-dark-text rounded-bl-md"
+                          ? "bg-primary-500 text-white rounded-br-sm"
+                          : "bg-dark-surface text-dark-text rounded-bl-sm"
                       )}>
-                        <p className="text-sm">{message.content}</p>
+                        <p className="text-sm leading-relaxed">{message.content}</p>
                       </div>
-                      <p className="text-[10px] text-dark-muted mt-1">
+                      <p className={cn(
+                        "text-[10px] text-dark-muted mt-1",
+                        isOwn ? "mr-1" : "ml-1"
+                      )}>
                         {formatTimeAgo(message.created_at)}
                       </p>
                     </div>
                   </motion.div>
                 )
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Message input */}
-            <form
-              onSubmit={handleSendMessage}
-              className="p-4 bg-dark-surface border-t border-dark-border"
-            >
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="input flex-1"
-                  placeholder="Message..."
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  maxLength={500}
-                />
-                <button
-                  type="submit"
-                  disabled={!newMessage.trim()}
-                  className="btn-primary px-4"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </form>
+              })
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        ) : (
-          <div className="p-4 space-y-3 overflow-y-auto h-full">
-            {members.map(member => {
-              const memberProfile = memberProfiles[member.user_id]
-              const stats = memberStats[member.user_id] || {}
-              const rankInfo = getRankInfo(stats.rank || 'Novice')
-              const isOwn = member.user_id === user.id
 
-              return (
-                <motion.div
-                  key={member.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn("card", isOwn && "border-primary-500/30")}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      isOwn ? "bg-primary-500/20" : "bg-dark-surface"
-                    )}>
-                      <span className={cn(
-                        "text-lg font-bold",
-                        isOwn ? "text-primary-400" : "text-dark-muted"
-                      )}>
-                        {(memberProfile?.username || 'U')[0].toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-white">
-                          @{memberProfile?.username || 'Unknown'}
-                        </h3>
-                        {member.role === 'owner' && (
-                          <Crown className="w-4 h-4 text-yellow-400" />
-                        )}
-                        {isOwn && (
-                          <span className="text-xs text-primary-400">(you)</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className={cn("text-xs", `rank-${(stats.rank || 'Novice').toLowerCase()}`)}>
-                          {rankInfo.icon} {stats.rank || 'Novice'}
-                        </span>
-                        <span className="text-xs text-dark-muted">
-                          {(stats.xp || 0).toLocaleString()} XP
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Flame className={cn(
-                          "w-4 h-4",
-                          stats.streak > 0 ? "text-orange-400" : "text-dark-muted"
-                        )} />
-                        <span className="text-white font-medium">{stats.streak}</span>
-                      </div>
-                      <p className="text-xs text-dark-muted">
-                        Today: {stats.todayCompleted}/{stats.todayTotal}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Today's progress bar */}
-                  {stats.todayTotal > 0 && (
-                    <div className="mt-3">
-                      <div className="progress-bar h-2">
-                        <div
-                          className="progress-fill bg-gradient-to-r from-primary-500 to-success"
-                          style={{
-                            width: `${(stats.todayCompleted / stats.todayTotal) * 100}%`
-                          }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </motion.div>
-              )
-            })}
-          </div>
-        )}
-      </main>
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-          <motion.div
-            initial={{ opacity: 0, y: 100 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-dark-surface w-full max-w-lg rounded-t-2xl p-4 safe-bottom"
+          {/* Message input - Fixed at bottom */}
+          <form
+            onSubmit={handleSendMessage}
+            className="shrink-0 p-3 bg-dark-surface border-t border-dark-border"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Community Settings</h3>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 bg-dark-card border border-dark-border rounded-full px-4 py-2.5 text-white placeholder-dark-muted focus:outline-none focus:border-primary-500 transition-all"
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                maxLength={500}
+              />
               <button
-                onClick={() => setShowSettings(false)}
-                className="text-dark-muted hover:text-white"
+                type="submit"
+                disabled={!newMessage.trim()}
+                className={cn(
+                  "p-2.5 rounded-full transition-all",
+                  newMessage.trim()
+                    ? "bg-primary-500 text-white"
+                    : "bg-dark-border text-dark-muted"
+                )}
               >
-                <X className="w-5 h-5" />
+                <Send className="w-5 h-5" />
               </button>
             </div>
+          </form>
+        </>
+      )}
 
-            <div className="space-y-2">
-              <div className="p-3 bg-dark-card rounded-xl">
-                <p className="text-sm text-dark-muted mb-1">Invite Code</p>
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-lg text-white tracking-wider">
-                    {community.invite_code}
-                  </span>
-                  <button
-                    onClick={handleCopyInviteCode}
-                    className="btn-secondary py-1 px-3 text-sm"
-                  >
-                    <Copy className="w-4 h-4" />
-                    Copy
-                  </button>
-                </div>
-              </div>
-
-              {userRole !== 'owner' && (
-                <button
-                  onClick={handleLeave}
-                  className="w-full flex items-center gap-3 p-3 bg-dark-card rounded-xl text-danger-light hover:bg-danger/10 transition-all"
-                >
-                  <LogOut className="w-5 h-5" />
-                  <span>Leave Community</span>
-                </button>
-              )}
-
-              {userRole === 'owner' && (
-                <button
-                  onClick={handleDeleteCommunity}
-                  className="w-full flex items-center gap-3 p-3 bg-dark-card rounded-xl text-danger-light hover:bg-danger/10 transition-all"
-                >
-                  <UserMinus className="w-5 h-5" />
-                  <span>Delete Community</span>
-                </button>
-              )}
+      {/* Activity Tab */}
+      {activeTab === 'activity' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {messages.filter(m => m.message_type !== 'text' && m.message_type !== 'system').length === 0 ? (
+            <div className="text-center py-12">
+              <Bell className="w-12 h-12 text-dark-muted mx-auto mb-3" />
+              <p className="text-dark-muted">No activity yet</p>
+              <p className="text-xs text-dark-muted mt-1">Member activities will appear here</p>
             </div>
-          </motion.div>
+          ) : (
+            messages
+              .filter(m => m.message_type !== 'text' && m.message_type !== 'system')
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+              .map((activity) => {
+                const senderProfile = memberProfiles[activity.user_id]
+                return (
+                  <motion.div
+                    key={activity.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-3 p-3 bg-dark-surface rounded-xl"
+                  >
+                    {getActivityIcon(activity.message_type)}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white">
+                        <span className="font-medium">{senderProfile?.username || 'Someone'}</span>
+                        {' '}{activity.content}
+                      </p>
+                      <p className="text-xs text-dark-muted">{formatTimeAgo(activity.created_at)}</p>
+                    </div>
+                  </motion.div>
+                )
+              })
+          )}
         </div>
       )}
+
+      {/* Members Tab */}
+      {activeTab === 'members' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {members.map(member => {
+            const memberProfile = memberProfiles[member.user_id]
+            const stats = memberStats[member.user_id] || {}
+            const rankInfo = getRankInfo(stats.rank || 'Novice')
+            const isOwn = member.user_id === user.id
+
+            return (
+              <motion.div
+                key={member.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn(
+                  "bg-dark-surface rounded-xl p-4 border",
+                  isOwn ? "border-primary-500/30" : "border-transparent"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-12 h-12 rounded-xl flex items-center justify-center",
+                    isOwn ? "bg-primary-500" : "bg-dark-card"
+                  )}>
+                    <span className={cn(
+                      "text-lg font-bold",
+                      isOwn ? "text-white" : "text-dark-muted"
+                    )}>
+                      {(memberProfile?.username || 'U')[0].toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-white">
+                        @{memberProfile?.username || 'Unknown'}
+                      </h3>
+                      {member.role === 'owner' && (
+                        <Crown className="w-4 h-4 text-yellow-400" />
+                      )}
+                      {isOwn && (
+                        <span className="text-xs text-primary-400 bg-primary-500/20 px-2 py-0.5 rounded-full">you</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className={cn("text-xs", `rank-${(stats.rank || 'Novice').toLowerCase()}`)}>
+                        {rankInfo.icon} {stats.rank || 'Novice'}
+                      </span>
+                      <span className="text-xs text-dark-muted">
+                        {(stats.xp || 0).toLocaleString()} XP
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1 justify-end">
+                      <Flame className={cn(
+                        "w-4 h-4",
+                        stats.streak > 0 ? "text-orange-400" : "text-dark-muted"
+                      )} />
+                      <span className="text-white font-bold">{stats.streak}</span>
+                    </div>
+                    <p className="text-xs text-dark-muted mt-0.5">
+                      {stats.todayCompleted}/{stats.todayTotal} today
+                    </p>
+                  </div>
+                </div>
+
+                {/* Today's progress bar */}
+                {stats.todayTotal > 0 && (
+                  <div className="mt-3">
+                    <div className="h-1.5 bg-dark-card rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(stats.todayCompleted / stats.todayTotal) * 100}%` }}
+                        className="h-full bg-gradient-to-r from-primary-500 to-success rounded-full"
+                      />
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Settings Modal - Centered */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowSettings(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-dark-surface w-full max-w-sm rounded-2xl p-5 border border-dark-border shadow-xl"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-lg font-semibold text-white">Community Settings</h3>
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className="p-1 text-dark-muted hover:text-white hover:bg-dark-border rounded-lg transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* Invite Code */}
+                <div className="p-4 bg-dark-card rounded-xl">
+                  <p className="text-xs text-dark-muted mb-2">Invite Code</p>
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xl text-white tracking-widest">
+                      {community.invite_code}
+                    </span>
+                    <button
+                      onClick={handleCopyInviteCode}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-primary-500/20 text-primary-400 rounded-lg text-sm font-medium hover:bg-primary-500/30 transition-all"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+
+                {/* Leave/Delete buttons */}
+                {userRole !== 'owner' ? (
+                  <button
+                    onClick={handleLeave}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-danger/10 text-danger-light rounded-xl hover:bg-danger/20 transition-all font-medium"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Leave Community
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDeleteCommunity}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-danger/10 text-danger-light rounded-xl hover:bg-danger/20 transition-all font-medium"
+                  >
+                    <UserMinus className="w-5 h-5" />
+                    Delete Community
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

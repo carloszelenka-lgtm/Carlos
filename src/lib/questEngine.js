@@ -1,255 +1,146 @@
 // Quest Engine - Deterministic template-based quest generation
 // Works without AI for $0 operation
 
-// Quest templates by intent type
-const QUEST_TEMPLATES = {
+// Simple, clean instructions based on intent (used when no description provided)
+const SIMPLE_INSTRUCTIONS = {
+  study: (minutes) => `Focus for ${minutes} minutes. Eliminate distractions.`,
+  fitness: (minutes) => `Complete a ${minutes}-minute session. Listen to your body.`,
+  language: (minutes) => `Practice for ${minutes} minutes. Speak, read, or listen.`,
+  creative: (minutes) => `Create for ${minutes} minutes. Focus on making, not perfecting.`,
+  skill: (minutes) => `Practice deliberately for ${minutes} minutes.`,
+  general: (minutes) => `Work focused for ${minutes} minutes.`
+}
+
+const SIMPLE_MVP = {
+  study: `5-minute review: Look over your notes or materials.`,
+  fitness: `5-minute movement: Light stretching or a quick walk.`,
+  language: `3-minute practice: Review 5 words or say 5 sentences.`,
+  creative: `5-minute sketch: Quick draft or brainstorm ideas.`,
+  skill: `5-minute drill: Practice one fundamental.`,
+  general: `5 minutes: Complete one small task.`
+}
+
+// Rich templates when user provides a description
+const RICH_TEMPLATES = {
   study: [
     {
-      title: (name) => `${name} Focus Session`,
-      instructions: (name, minutes, desc) => desc
-        ? `Complete a ${minutes}-minute focused ${desc.toLowerCase()} session. Eliminate distractions and work with intention.`
-        : `Complete a ${minutes}-minute focused study session on ${name}. Eliminate distractions and work with intention.`,
-      mvp: (name, desc) => desc
-        ? `5-minute quick review: Scan your notes or materials for ${desc.toLowerCase()}.`
-        : `5-minute quick review: Scan your notes or materials for ${name}.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `${minutes}-minute focused session: ${desc}. Eliminate distractions and work with intention.`,
+      mvp: (desc) => `5-minute quick review of your ${desc.toLowerCase()} materials.`
     },
     {
-      title: (name) => `${name} Active Recall`,
-      instructions: (name, minutes, desc) => desc
-        ? `Spend ${minutes} minutes testing yourself on ${desc.toLowerCase()}. Write questions and answer them without looking at notes.`
-        : `Spend ${minutes} minutes testing yourself on ${name} concepts. Write questions and answer them without looking at notes.`,
-      mvp: (name, desc) => desc
-        ? `3-minute recall: Write down 3 key things you remember about ${desc.toLowerCase()}.`
-        : `3-minute recall: Write down 3 key things you remember from your last ${name} session.`
-    },
-    {
-      title: (name) => `${name} Deep Work`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of deep work on ${desc.toLowerCase()}. Phone away, notifications off, full focus.`
-        : `${minutes} minutes of deep work on ${name}. Phone away, notifications off, full focus.`,
-      mvp: (name, desc) => desc
-        ? `5-minute mini-session: Review one concept from ${desc.toLowerCase()}.`
-        : `5-minute mini-session: Review one key concept from ${name}.`
-    },
-    {
-      title: (name) => `${name} Practice Problems`,
-      instructions: (name, minutes, desc) => desc
-        ? `Work through practice problems or exercises for ${desc.toLowerCase()} for ${minutes} minutes.`
-        : `Work through practice problems or exercises related to ${name} for ${minutes} minutes.`,
-      mvp: (name, desc) => desc
-        ? `Solve one problem related to ${desc.toLowerCase()}.`
-        : `Solve one problem or review one example for ${name}.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `Spend ${minutes} minutes on ${desc}. Test yourself without looking at notes.`,
+      mvp: (desc) => `Write down 3 key things you remember about ${desc.toLowerCase()}.`
     }
   ],
 
   fitness: [
     {
-      title: (name) => `${name} Session`,
-      instructions: (name, minutes, desc) => desc
-        ? `Complete a ${minutes}-minute ${desc.toLowerCase()} session. Focus on form and consistency.`
-        : `Complete a ${minutes}-minute ${name.toLowerCase()} session. Listen to your body and focus on form.`,
-      mvp: (name, desc) => desc
-        ? `5-minute mobility: Light stretching and movement for ${desc.toLowerCase()} prep.`
-        : `5-minute mobility: Light stretching and movement to stay active.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `${minutes}-minute ${desc.toLowerCase()}. Focus on form and consistency.`,
+      mvp: (desc) => `5-minute mobility: Light stretching to prepare for ${desc.toLowerCase()}.`
     },
     {
-      title: (name) => `${name} Movement`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of ${desc.toLowerCase()}. Stay consistent and enjoy the movement.`
-        : `${minutes} minutes of mindful movement for ${name}. Stay consistent and enjoy the process.`,
-      mvp: (name, desc) => `5-minute walk or gentle stretching to keep the streak alive.`
-    },
-    {
-      title: (name) => `${name} Strength`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes}-minute strength-focused session for ${desc.toLowerCase()}. Quality over quantity.`
-        : `${minutes}-minute strength-focused session. Quality over quantity, focus on control.`,
-      mvp: (name, desc) => `3-minute bodyweight basics: 10 squats, 10 push-ups (or modified), 30-second plank.`
-    },
-    {
-      title: (name) => `${name} Active Recovery`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of active recovery for ${desc.toLowerCase()}. Gentle movement to aid recovery.`
-        : `${minutes} minutes of active recovery. Gentle movement, stretching, or yoga.`,
-      mvp: (name, desc) => `5-minute stretch routine: Focus on major muscle groups.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `Complete ${minutes} minutes of ${desc.toLowerCase()}. Stay present and enjoy the movement.`,
+      mvp: () => `5-minute active recovery: Gentle stretching or a short walk.`
     }
   ],
 
   language: [
     {
-      title: (name) => `${name} Vocabulary`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of vocabulary practice for ${desc.toLowerCase()}. Learn new words and review old ones.`
-        : `${minutes} minutes of ${name} vocabulary practice. Learn new words and review ones you've learned.`,
-      mvp: (name, desc) => desc
-        ? `3-minute review: Look at 5 words you've learned in ${desc.toLowerCase()}.`
-        : `3-minute review: Look at 5 words you've learned recently in ${name}.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `${minutes} minutes: ${desc}. Immerse yourself fully.`,
+      mvp: (desc) => `3-minute practice: Quick ${desc.toLowerCase()} review.`
     },
     {
-      title: (name) => `${name} Speaking Practice`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes speaking out loud in ${name}. ${desc}.`
-        : `${minutes} minutes speaking out loud in ${name}. Read text, describe your day, or practice conversations.`,
-      mvp: (name, desc) => `3-minute speaking: Say 5 sentences out loud in ${name}.`
-    },
-    {
-      title: (name) => `${name} Listening`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of ${name} listening practice: ${desc.toLowerCase()}.`
-        : `${minutes} minutes of ${name} listening practice. Podcast, video, or music with lyrics.`,
-      mvp: (name, desc) => `5-minute listen: One short video or audio clip in ${name}.`
-    },
-    {
-      title: (name) => `${name} Reading`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes reading in ${name}: ${desc.toLowerCase()}.`
-        : `${minutes} minutes reading in ${name}. Articles, stories, or textbook content.`,
-      mvp: (name, desc) => `3-minute read: One paragraph or short text in ${name}.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `Practice ${desc.toLowerCase()} for ${minutes} minutes. Speak out loud when possible.`,
+      mvp: () => `3-minute speaking: Say 5 sentences out loud.`
     }
   ],
 
   creative: [
     {
-      title: (name) => `${name} Creation`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of creative work: ${desc.toLowerCase()}. Focus on creating, not perfecting.`
-        : `${minutes} minutes of creative work on ${name}. Focus on creating, not perfecting.`,
-      mvp: (name, desc) => desc
-        ? `5-minute sketch: Quick rough draft or idea dump for ${desc.toLowerCase()}.`
-        : `5-minute sketch: Quick rough draft or idea dump for ${name}.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `${minutes} minutes: ${desc}. Focus on creating, not perfecting.`,
+      mvp: (desc) => `5-minute sketch: Quick rough draft for ${desc.toLowerCase()}.`
     },
     {
-      title: (name) => `${name} Practice`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of deliberate practice: ${desc.toLowerCase()}.`
-        : `${minutes} minutes of deliberate ${name.toLowerCase()} practice. Work on technique or try something new.`,
-      mvp: (name, desc) => desc
-        ? `3-minute warm-up: Quick exercise for ${desc.toLowerCase()}.`
-        : `3-minute warm-up: Quick creative exercise for ${name}.`
-    },
-    {
-      title: (name) => `${name} Exploration`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes exploring: ${desc.toLowerCase()}. Try new ideas without judgment.`
-        : `${minutes} minutes exploring new ideas for ${name}. Experiment without judgment.`,
-      mvp: (name, desc) => `5-minute brainstorm: Write or sketch 3 new ideas.`
-    },
-    {
-      title: (name) => `${name} Project Work`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes on your project: ${desc.toLowerCase()}.`
-        : `${minutes} minutes working on your ${name.toLowerCase()} project. Make progress, any progress.`,
-      mvp: (name, desc) => `5 minutes: Complete one small part of your project.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `Work on ${desc.toLowerCase()} for ${minutes} minutes. Let creativity flow.`,
+      mvp: () => `5-minute brainstorm: Jot down 3 new ideas.`
     }
   ],
 
   skill: [
     {
-      title: (name) => `${name} Practice`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of deliberate practice: ${desc.toLowerCase()}.`
-        : `${minutes} minutes of deliberate ${name.toLowerCase()} practice. Focus on one specific aspect.`,
-      mvp: (name, desc) => desc
-        ? `5-minute drill: Quick focused practice on ${desc.toLowerCase()}.`
-        : `5-minute drill: Quick focused practice on one ${name} fundamental.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `${minutes} minutes of deliberate practice: ${desc}`,
+      mvp: (desc) => `5-minute drill: Quick focused practice on ${desc.toLowerCase()}.`
     },
     {
-      title: (name) => `${name} Skill Building`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes building ${name} skills: ${desc.toLowerCase()}.`
-        : `${minutes} minutes building ${name} skills. Challenge yourself just beyond your comfort zone.`,
-      mvp: (name, desc) => `3-minute review: Practice one basic move or concept.`
-    },
-    {
-      title: (name) => `${name} Learning`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes learning: ${desc.toLowerCase()}.`
-        : `${minutes} minutes learning something new about ${name}. Tutorial, article, or video.`,
-      mvp: (name, desc) => `5-minute learn: Watch or read one short tutorial.`
-    },
-    {
-      title: (name) => `${name} Challenge`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes tackling a challenge: ${desc.toLowerCase()}.`
-        : `${minutes} minutes tackling a ${name} challenge. Push your limits.`,
-      mvp: (name, desc) => `5 minutes: Attempt one challenging exercise.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `Practice ${desc.toLowerCase()} for ${minutes} minutes. Challenge yourself.`,
+      mvp: () => `5 minutes: Practice one fundamental technique.`
     }
   ],
 
   general: [
     {
-      title: (name) => `${name} Session`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes on ${name}: ${desc.toLowerCase()}.`
-        : `${minutes} minutes dedicated to ${name}. Make meaningful progress.`,
-      mvp: (name, desc) => desc
-        ? `5 minutes: Quick progress on ${desc.toLowerCase()}.`
-        : `5 minutes: Make one small step forward on ${name}.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `${minutes} minutes: ${desc}. Make meaningful progress.`,
+      mvp: (desc) => `5 minutes: Make one step forward on ${desc.toLowerCase()}.`
     },
     {
-      title: (name) => `${name} Focus Time`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes of focused time: ${desc.toLowerCase()}.`
-        : `${minutes} minutes of focused time on ${name}. Single-task, no distractions.`,
-      mvp: (name, desc) => `5-minute focus: Complete one small task.`
-    },
-    {
-      title: (name) => `${name} Planning`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes planning and organizing: ${desc.toLowerCase()}.`
-        : `${minutes} minutes planning and organizing for ${name}. Set clear next steps.`,
-      mvp: (name, desc) => `3-minute plan: Write down your next 3 action items.`
-    },
-    {
-      title: (name) => `${name} Progress`,
-      instructions: (name, minutes, desc) => desc
-        ? `${minutes} minutes making progress: ${desc.toLowerCase()}.`
-        : `${minutes} minutes making progress on ${name}. Every step counts.`,
-      mvp: (name, desc) => `5 minutes: Do one thing to move forward.`
+      title: (name, desc) => name,
+      instructions: (name, minutes, desc) => `Focus on ${desc.toLowerCase()} for ${minutes} minutes. Single-task mode.`,
+      mvp: () => `5 minutes: Complete one small task.`
     }
   ]
 }
 
-// Challenge day templates (harder quests for high performers)
+// Challenge templates for high performers
 const CHALLENGE_TEMPLATES = {
   study: {
-    title: (name) => `${name} Challenge: Deep Dive`,
+    title: (name) => `${name} - Challenge`,
     instructions: (name, minutes, desc) => desc
-      ? `Extended ${Math.round(minutes * 1.5)}-minute deep session: ${desc.toLowerCase()}. Push your focus to the next level.`
-      : `Extended ${Math.round(minutes * 1.5)}-minute deep study session on ${name}. Push your focus to the next level.`,
+      ? `Extended ${minutes}-minute deep session: ${desc}. Push your focus to the next level.`
+      : `Extended ${minutes}-minute deep study session. Maximum focus, no breaks.`,
     multiplier: 1.5
   },
   fitness: {
-    title: (name) => `${name} Challenge: Level Up`,
+    title: (name) => `${name} - Challenge`,
     instructions: (name, minutes, desc) => desc
-      ? `Challenge session (${Math.round(minutes * 1.25)} min): ${desc.toLowerCase()}. Increase intensity or duration.`
-      : `Challenge ${name.toLowerCase()} session (${Math.round(minutes * 1.25)} min). Increase intensity or try something harder.`,
+      ? `Challenge session (${minutes} min): ${desc}. Increase intensity.`
+      : `Challenge ${minutes}-minute session. Push a little harder today.`,
     multiplier: 1.25
   },
   language: {
-    title: (name) => `${name} Challenge: Immersion`,
-    instructions: (name, minutes, desc) => `${Math.round(minutes * 1.5)}-minute immersion: Only ${name}, no native language allowed.`,
+    title: (name) => `${name} - Immersion`,
+    instructions: (name, minutes, desc) => `${minutes}-minute immersion. No native language allowed.`,
     multiplier: 1.5
   },
   creative: {
-    title: (name) => `${name} Challenge: Create & Ship`,
+    title: (name) => `${name} - Ship It`,
     instructions: (name, minutes, desc) => desc
-      ? `Complete and share something: ${desc.toLowerCase()}. Time: ${Math.round(minutes * 1.5)} minutes.`
-      : `Create something complete in ${Math.round(minutes * 1.5)} minutes and share it (with a friend, online, anywhere).`,
+      ? `Complete and share: ${desc}. ${minutes} minutes to finish something.`
+      : `Create and ship something in ${minutes} minutes. Share it with someone.`,
     multiplier: 1.5
   },
   skill: {
-    title: (name) => `${name} Challenge: Master Class`,
+    title: (name) => `${name} - Level Up`,
     instructions: (name, minutes, desc) => desc
-      ? `Advanced session (${Math.round(minutes * 1.5)} min): ${desc.toLowerCase()}. Focus on advanced techniques.`
-      : `${Math.round(minutes * 1.5)}-minute advanced ${name.toLowerCase()} session. Focus on techniques you find difficult.`,
+      ? `Advanced session (${minutes} min): ${desc}. Focus on what's hardest.`
+      : `${minutes}-minute advanced session. Work on your weakest areas.`,
     multiplier: 1.5
   },
   general: {
-    title: (name) => `${name} Challenge: Sprint`,
+    title: (name) => `${name} - Sprint`,
     instructions: (name, minutes, desc) => desc
-      ? `Challenge sprint (${Math.round(minutes * 1.5)} min): ${desc.toLowerCase()}. Maximum focus and output.`
-      : `${Math.round(minutes * 1.5)}-minute sprint on ${name}. Maximum focus and output.`,
+      ? `${minutes}-minute sprint: ${desc}. Maximum output.`
+      : `${minutes}-minute productivity sprint. Maximum focus and output.`,
     multiplier: 1.5
   }
 }
@@ -334,7 +225,6 @@ const adjustTime = (baseTime, completionRate) => {
 
 // Generate a quest for a track
 export const generateQuest = (track, existingQuests = [], userStyle = 'balanced', date = new Date()) => {
-  const templates = QUEST_TEMPLATES[track.intent] || QUEST_TEMPLATES.general
   const completionRate = getRecentCompletionRate(existingQuests, track.id)
   const streak = getCurrentStreak(existingQuests, track.id)
 
@@ -349,13 +239,17 @@ export const generateQuest = (track, existingQuests = [], userStyle = 'balanced'
   const adjustedDifficulty = adjustDifficulty(track.difficulty_pref, completionRate)
   const adjustedTime = adjustTime(track.time_budget_min, completionRate)
 
+  // Check if user provided a meaningful description
+  const hasDescription = track.description && track.description.trim().length > 5
+
   // Select template (use seeded random based on date for consistency)
   const dateStr = date.toISOString().split('T')[0]
   const seed = hashCode(track.id + dateStr)
-  const templateIndex = Math.abs(seed) % templates.length
 
   let quest
+
   if (shouldChallenge) {
+    // Challenge day quest
     const challengeTemplate = CHALLENGE_TEMPLATES[track.intent] || CHALLENGE_TEMPLATES.general
     const challengeTime = Math.round(adjustedTime * challengeTemplate.multiplier)
 
@@ -372,18 +266,39 @@ export const generateQuest = (track, existingQuests = [], userStyle = 'balanced'
       reward_xp: calculateXP(adjustedDifficulty + 1, challengeTime, true),
       status: 'pending'
     }
-  } else {
+  } else if (hasDescription) {
+    // Rich quest with description context
+    const templates = RICH_TEMPLATES[track.intent] || RICH_TEMPLATES.general
+    const templateIndex = Math.abs(seed) % templates.length
     const template = templates[templateIndex]
 
     quest = {
       track_id: track.id,
       user_id: track.user_id,
       date: dateStr,
-      title: template.title(track.name),
+      title: template.title(track.name, track.description),
       instructions: template.instructions(track.name, adjustedTime, track.description),
       estimated_minutes: adjustedTime,
       difficulty: adjustedDifficulty,
-      mvp_instructions: template.mvp(track.name, track.description),
+      mvp_instructions: template.mvp(track.description),
+      mvp_minutes: 5,
+      reward_xp: calculateXP(adjustedDifficulty, adjustedTime),
+      status: 'pending'
+    }
+  } else {
+    // Simple quest - just use the track name, no awkward suffixes
+    const simpleInstructions = SIMPLE_INSTRUCTIONS[track.intent] || SIMPLE_INSTRUCTIONS.general
+    const simpleMVP = SIMPLE_MVP[track.intent] || SIMPLE_MVP.general
+
+    quest = {
+      track_id: track.id,
+      user_id: track.user_id,
+      date: dateStr,
+      title: track.name, // Just the track name, clean and simple
+      instructions: simpleInstructions(adjustedTime),
+      estimated_minutes: adjustedTime,
+      difficulty: adjustedDifficulty,
+      mvp_instructions: simpleMVP,
       mvp_minutes: 5,
       reward_xp: calculateXP(adjustedDifficulty, adjustedTime),
       status: 'pending'
@@ -462,9 +377,28 @@ export const validateTrackConstraints = (intent, constraints) => {
   return { valid: true }
 }
 
+// Notify community about quest activity
+export const createCommunityNotification = (communityId, userId, type, questTitle, details = {}) => {
+  const messages = {
+    'quest_created': `created a new task: "${questTitle}"`,
+    'quest_started': `started working on "${questTitle}"`,
+    'quest_completed': `completed "${questTitle}"${details.xp ? ` (+${details.xp} XP)` : ''}`,
+    'streak': `reached a ${details.streak}-day streak!`,
+    'rank_up': `ranked up to ${details.rank}!`
+  }
+
+  return {
+    community_id: communityId,
+    user_id: userId,
+    content: messages[type] || `updated "${questTitle}"`,
+    message_type: type,
+    metadata: details
+  }
+}
+
 // Export for testing
 export const _internal = {
-  QUEST_TEMPLATES,
+  RICH_TEMPLATES,
   CHALLENGE_TEMPLATES,
   calculateXP,
   getRecentCompletionRate,
