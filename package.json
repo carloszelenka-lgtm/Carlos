@@ -7,9 +7,23 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
+    "cap:init": "cap init StreakOS com.streakos.app --web-dir dist",
+    "cap:add:ios": "cap add ios",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync",
+    "cap:open:ios": "cap open ios",
+    "cap:open:android": "cap open android",
+    "mobile:ios": "npm run build && cap sync ios && cap open ios",
+    "mobile:android": "npm run build && cap sync android && cap open android"
   },
   "dependencies": {
+    "@capacitor/app": "^5.0.0",
+    "@capacitor/core": "^5.0.0",
+    "@capacitor/haptics": "^5.0.0",
+    "@capacitor/keyboard": "^5.0.0",
+    "@capacitor/preferences": "^5.0.0",
+    "@capacitor/status-bar": "^5.0.0",
     "@supabase/supabase-js": "^2.39.0",
     "@stripe/stripe-js": "^2.2.0",
     "canvas-confetti": "^1.9.2",
@@ -27,6 +41,7 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^5.0.0",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
