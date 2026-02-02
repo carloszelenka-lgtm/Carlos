@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Plus, Target, BookOpen, Dumbbell, Languages, Palette, Star,
-  ChevronRight, Flame, Pause, Play, MoreVertical
+  ChevronRight, Flame, Pause, Play, MoreVertical, Calendar, Repeat
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { localStore, TABLES } from '../lib/localStore'
@@ -39,7 +39,16 @@ export default function TracksPage() {
 
   const loadTracks = () => {
     const userTracks = localStore.query(TABLES.TRACKS, t => t.user_id === user.id)
-    setTracks(userTracks)
+
+    // Sort tracks: active first, then by name
+    const sortedTracks = userTracks.sort((a, b) => {
+      // Paused tracks go to the bottom
+      if (a.is_paused !== b.is_paused) return a.is_paused ? 1 : -1
+      // Sort by created date (newer first)
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+
+    setTracks(sortedTracks)
 
     // Load streaks
     const trackStreaks = localStore.query(TABLES.STREAKS, s =>
@@ -53,6 +62,25 @@ export default function TracksPage() {
 
     setLoading(false)
   }
+
+  // Separate one-time tasks from recurring tracks
+  const oneTimeTasks = tracks.filter(t => t.is_one_time)
+  const recurringTracks = tracks.filter(t => !t.is_one_time)
+
+  // Check if a track is active today (for recurring tracks)
+  const isActiveToday = (track) => {
+    const today = new Date().toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase()
+    const dayMap = { sun: 'sun', mon: 'mon', tue: 'tue', wed: 'wed', thu: 'thu', fri: 'fri', sat: 'sat' }
+    return (track.days_active || []).includes(dayMap[today])
+  }
+
+  // Sort recurring tracks: active today first
+  const sortedRecurringTracks = recurringTracks.sort((a, b) => {
+    const aActive = isActiveToday(a)
+    const bActive = isActiveToday(b)
+    if (aActive !== bActive) return aActive ? -1 : 1
+    return 0
+  })
 
   const togglePause = (trackId, isPaused) => {
     localStore.update(TABLES.TRACKS, trackId, { is_paused: !isPaused })
@@ -116,95 +144,162 @@ export default function TracksPage() {
             </Link>
           </motion.div>
         ) : (
-          <div className="space-y-3">
-            <AnimatePresence>
-              {tracks.map((track, index) => {
-                const IntentIcon = INTENT_ICONS[track.intent] || Star
-                const colors = INTENT_COLORS[track.intent] || INTENT_COLORS.general
-                const streak = streaks[track.id] || 0
+          <div className="space-y-6">
+            {/* One-time tasks section */}
+            {oneTimeTasks.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="w-5 h-5 text-primary-400" />
+                  <h2 className="font-semibold text-white">Today's Tasks</h2>
+                  <span className="text-sm text-dark-muted">({oneTimeTasks.length})</span>
+                </div>
+                <div className="space-y-3">
+                  <AnimatePresence>
+                    {oneTimeTasks.map((track, index) => {
+                      const IntentIcon = INTENT_ICONS[track.intent] || Star
+                      const colors = INTENT_COLORS[track.intent] || INTENT_COLORS.general
 
-                return (
-                  <motion.div
-                    key={track.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -100 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Link
-                      to={`/tracks/${track.id}`}
-                      className={cn(
-                        "card-hover block",
-                        track.is_paused && "opacity-60"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shrink-0",
-                          colors.gradient
-                        )}>
-                          <IntentIcon className="w-6 h-6 text-white" />
-                        </div>
+                      return (
+                        <motion.div
+                          key={track.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, x: -100 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Link to={`/tracks/${track.id}`} className="card-hover block">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br shrink-0",
+                                colors.gradient
+                              )}>
+                                <IntentIcon className="w-5 h-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-white truncate">{track.name}</h3>
+                                <div className="flex items-center gap-3 text-sm">
+                                  <span className={cn("capitalize", colors.text)}>{track.intent}</span>
+                                  <span className="text-dark-muted">{formatMinutes(track.time_budget_min)}</span>
+                                </div>
+                              </div>
+                              <ChevronRight className="w-5 h-5 text-dark-muted shrink-0" />
+                            </div>
+                          </Link>
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                </div>
+              </section>
+            )}
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-white truncate">
-                              {track.name}
-                            </h3>
-                            {track.is_paused && (
-                              <span className="badge bg-dark-border text-dark-muted">
-                                <Pause className="w-3 h-3" />
-                                Paused
-                              </span>
+            {/* Recurring tracks section */}
+            {sortedRecurringTracks.length > 0 && (
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <Repeat className="w-5 h-5 text-success-light" />
+                  <h2 className="font-semibold text-white">Recurring Tracks</h2>
+                  <span className="text-sm text-dark-muted">({sortedRecurringTracks.length})</span>
+                </div>
+                <div className="space-y-3">
+                  <AnimatePresence>
+                    {sortedRecurringTracks.map((track, index) => {
+                      const IntentIcon = INTENT_ICONS[track.intent] || Star
+                      const colors = INTENT_COLORS[track.intent] || INTENT_COLORS.general
+                      const streak = streaks[track.id] || 0
+                      const activeToday = isActiveToday(track)
+
+                      return (
+                        <motion.div
+                          key={track.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, x: -100 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Link
+                            to={`/tracks/${track.id}`}
+                            className={cn(
+                              "card-hover block",
+                              track.is_paused && "opacity-60",
+                              activeToday && !track.is_paused && "border-l-4 border-l-primary-500"
                             )}
-                          </div>
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className={cn(
+                                "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br shrink-0",
+                                colors.gradient
+                              )}>
+                                <IntentIcon className="w-6 h-6 text-white" />
+                              </div>
 
-                          {track.description && (
-                            <p className="text-sm text-dark-muted mt-0.5 line-clamp-1">
-                              {track.description}
-                            </p>
-                          )}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-semibold text-white truncate">
+                                    {track.name}
+                                  </h3>
+                                  {track.is_paused && (
+                                    <span className="badge bg-dark-border text-dark-muted">
+                                      <Pause className="w-3 h-3" />
+                                      Paused
+                                    </span>
+                                  )}
+                                  {activeToday && !track.is_paused && (
+                                    <span className="badge bg-primary-500/20 text-primary-400">
+                                      Today
+                                    </span>
+                                  )}
+                                </div>
 
-                          <div className="flex items-center gap-4 mt-2 text-sm">
-                            <span className={cn("capitalize", colors.text)}>
-                              {track.intent}
-                            </span>
-                            <span className="text-dark-muted">
-                              {formatMinutes(track.time_budget_min)}/day
-                            </span>
-                            {streak > 0 && (
-                              <span className="flex items-center gap-1 text-orange-400">
-                                <Flame className="w-4 h-4" />
-                                {streak}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Active days */}
-                          <div className="flex items-center gap-1 mt-2">
-                            {DAYS_OF_WEEK.map(day => (
-                              <span
-                                key={day.value}
-                                className={cn(
-                                  "w-6 h-6 rounded-md flex items-center justify-center text-xs font-medium",
-                                  (track.days_active || []).includes(day.value)
-                                    ? `${colors.bg} ${colors.text}`
-                                    : "bg-dark-border/50 text-dark-muted/50"
+                                {track.description && (
+                                  <p className="text-sm text-dark-muted mt-0.5 line-clamp-1">
+                                    {track.description}
+                                  </p>
                                 )}
-                              >
-                                {day.label[0]}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
 
-                        <ChevronRight className="w-5 h-5 text-dark-muted shrink-0" />
-                      </div>
-                    </Link>
-                  </motion.div>
-                )
-              })}
-            </AnimatePresence>
+                                <div className="flex items-center gap-4 mt-2 text-sm">
+                                  <span className={cn("capitalize", colors.text)}>
+                                    {track.intent}
+                                  </span>
+                                  <span className="text-dark-muted">
+                                    {formatMinutes(track.time_budget_min)}/day
+                                  </span>
+                                  {streak > 0 && (
+                                    <span className="flex items-center gap-1 text-orange-400">
+                                      <Flame className="w-4 h-4" />
+                                      {streak}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Active days */}
+                                <div className="flex items-center gap-1 mt-2">
+                                  {DAYS_OF_WEEK.map(day => (
+                                    <span
+                                      key={day.value}
+                                      className={cn(
+                                        "w-6 h-6 rounded-md flex items-center justify-center text-xs font-medium",
+                                        (track.days_active || []).includes(day.value)
+                                          ? `${colors.bg} ${colors.text}`
+                                          : "bg-dark-border/50 text-dark-muted/50"
+                                      )}
+                                    >
+                                      {day.label[0]}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <ChevronRight className="w-5 h-5 text-dark-muted shrink-0" />
+                            </div>
+                          </Link>
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                </div>
+              </section>
+            )}
           </div>
         )}
 

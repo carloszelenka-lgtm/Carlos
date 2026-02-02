@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   User, Globe, Bell, Palette, Crown, Shield, LogOut,
   ChevronRight, Trash2, Download, Moon, Sun, Sparkles,
-  CreditCard, AlertCircle, Check, Loader2
+  CreditCard, AlertCircle, Check, Loader2, Skull
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
@@ -16,6 +16,13 @@ const STYLES = [
   { value: 'strict', label: 'Strict', desc: 'No excuses. Challenge days. Max progression.' },
   { value: 'balanced', label: 'Balanced', desc: 'Steady progress with flexibility.' },
   { value: 'chill', label: 'Chill', desc: 'Low pressure. Build habits gently.' }
+]
+
+const STRIKE_OPTIONS = [
+  { value: 0, label: 'Off', desc: 'No strike tracking' },
+  { value: 1, label: '1 Strike', desc: 'Reset after 1 missed day' },
+  { value: 3, label: '3 Strikes', desc: 'Reset after 3 missed days' },
+  { value: 5, label: '5 Strikes', desc: 'More forgiving' }
 ]
 
 const TIMEZONES = [
@@ -44,7 +51,8 @@ export default function SettingsPage() {
     username: profile?.username || '',
     timezone: profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     style: profile?.style || 'balanced',
-    ai_enabled: profile?.ai_enabled || false
+    ai_enabled: profile?.ai_enabled || false,
+    strike_limit: profile?.strike_limit ?? 3
   })
 
   const handleSave = async () => {
@@ -197,6 +205,50 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+        </motion.div>
+
+        {/* Strike system settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.075 }}
+          className="card"
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <Skull className="w-5 h-5 text-danger-light" />
+            <h3 className="font-semibold text-white">Strike System</h3>
+          </div>
+          <p className="text-sm text-dark-muted mb-3">
+            Strikes accumulate when you miss a day without using a shield. When you hit the limit, your streak resets.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {STRIKE_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                onClick={() => setFormData({ ...formData, strike_limit: option.value })}
+                className={cn(
+                  "p-3 rounded-xl text-left transition-all",
+                  formData.strike_limit === option.value
+                    ? "bg-danger/20 border border-danger-light"
+                    : "bg-dark-surface border border-dark-border hover:border-dark-muted"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-white">{option.label}</span>
+                  {formData.strike_limit === option.value && (
+                    <Check className="w-4 h-4 text-danger-light" />
+                  )}
+                </div>
+                <p className="text-xs text-dark-muted mt-1">{option.desc}</p>
+              </button>
+            ))}
+          </div>
+          {(profile?.strikes || 0) > 0 && (
+            <div className="mt-3 p-3 bg-danger/10 rounded-xl flex items-center justify-between">
+              <span className="text-sm text-danger-light">Current strikes</span>
+              <span className="font-bold text-danger-light">{profile?.strikes || 0}</span>
+            </div>
+          )}
         </motion.div>
 
         {/* Theme settings */}

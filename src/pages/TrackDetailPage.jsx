@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import {
   ArrowLeft, Flame, Trophy, Clock, Edit2, Trash2, Pause, Play,
   BookOpen, Dumbbell, Languages, Palette, Target, Star,
-  CheckCircle2, XCircle, Shield, Calendar
+  CheckCircle2, XCircle, Shield, Calendar, X, Loader2
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
@@ -39,6 +39,15 @@ export default function TrackDetailPage() {
   const [recentQuests, setRecentQuests] = useState([])
   const [loading, setLoading] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    time_budget_min: 30,
+    difficulty_pref: 3,
+    days_active: []
+  })
 
   useEffect(() => {
     loadTrack()
@@ -51,6 +60,13 @@ export default function TrackDetailPage() {
       return
     }
     setTrack(t)
+    setEditForm({
+      name: t.name || '',
+      description: t.description || '',
+      time_budget_min: t.time_budget_min || 30,
+      difficulty_pref: t.difficulty_pref || 3,
+      days_active: t.days_active || []
+    })
 
     // Load streak
     const streaks = localStore.query(TABLES.STREAKS, s =>
@@ -73,6 +89,41 @@ export default function TrackDetailPage() {
     localStore.update(TABLES.TRACKS, id, { is_paused: !track.is_paused })
     loadTrack()
     toast.success(track.is_paused ? 'Track resumed' : 'Track paused')
+  }
+
+  const handleEditDayToggle = (day) => {
+    const days = editForm.days_active.includes(day)
+      ? editForm.days_active.filter(d => d !== day)
+      : [...editForm.days_active, day]
+    setEditForm({ ...editForm, days_active: days })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editForm.name.trim()) {
+      toast.error('Track name is required')
+      return
+    }
+    if (editForm.days_active.length === 0 && !track.is_one_time) {
+      toast.error('Select at least one active day')
+      return
+    }
+
+    setSaving(true)
+    try {
+      localStore.update(TABLES.TRACKS, id, {
+        name: editForm.name.trim(),
+        description: editForm.description.trim(),
+        time_budget_min: editForm.time_budget_min,
+        difficulty_pref: editForm.difficulty_pref,
+        days_active: editForm.days_active
+      })
+      loadTrack()
+      setShowEditModal(false)
+      toast.success('Track updated!')
+    } catch (error) {
+      toast.error('Failed to update track')
+    }
+    setSaving(false)
   }
 
   const handleDelete = () => {
@@ -147,6 +198,12 @@ export default function TrackDetailPage() {
                 )}
               </div>
             </div>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="p-2 bg-white/20 backdrop-blur-sm rounded-lg hover:bg-white/30 transition-colors"
+            >
+              <Edit2 className="w-5 h-5 text-white" />
+            </button>
           </div>
 
           {/* Quick stats */}
@@ -310,6 +367,140 @@ export default function TrackDetailPage() {
                   className="btn-danger flex-1"
                 >
                   Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Edit modal */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="card max-w-md w-full max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Edit Track</h3>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="p-1 hover:bg-dark-border rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-dark-muted" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Name */}
+                <div>
+                  <label className="label">Track Name *</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    maxLength={100}
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="label">Description</label>
+                  <textarea
+                    className="input min-h-[80px]"
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    maxLength={500}
+                  />
+                </div>
+
+                {/* Time budget */}
+                <div>
+                  <label className="label">Daily Time ({editForm.time_budget_min} min)</label>
+                  <input
+                    type="range"
+                    min={5}
+                    max={120}
+                    step={5}
+                    value={editForm.time_budget_min}
+                    onChange={(e) => setEditForm({ ...editForm, time_budget_min: parseInt(e.target.value) })}
+                    className="w-full accent-primary-500"
+                  />
+                  <div className="flex justify-between text-xs text-dark-muted mt-1">
+                    <span>5 min</span>
+                    <span>2 hours</span>
+                  </div>
+                </div>
+
+                {/* Difficulty */}
+                <div>
+                  <label className="label">Difficulty</label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 1, label: 'Easy' },
+                      { value: 3, label: 'Medium' },
+                      { value: 5, label: 'Hard' }
+                    ].map((level) => (
+                      <button
+                        key={level.value}
+                        type="button"
+                        onClick={() => setEditForm({ ...editForm, difficulty_pref: level.value })}
+                        className={cn(
+                          "flex-1 py-2.5 rounded-xl text-sm font-medium transition-all",
+                          editForm.difficulty_pref === level.value
+                            ? "bg-primary-500 text-white"
+                            : "bg-dark-surface text-dark-muted hover:text-white"
+                        )}
+                      >
+                        {level.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Active days (only for recurring tracks) */}
+                {!track.is_one_time && (
+                  <div>
+                    <label className="label">Active Days</label>
+                    <div className="flex justify-between gap-2">
+                      {DAYS_OF_WEEK.map((day) => (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => handleEditDayToggle(day.value)}
+                          className={cn(
+                            "flex-1 py-3 rounded-xl text-sm font-medium transition-all",
+                            editForm.days_active.includes(day.value)
+                              ? "bg-primary-500 text-white"
+                              : "bg-dark-surface text-dark-muted hover:text-white"
+                          )}
+                        >
+                          {day.label[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                  className="btn-primary flex-1"
+                >
+                  {saving ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    'Save Changes'
+                  )}
                 </button>
               </div>
             </motion.div>
