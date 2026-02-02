@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, BookOpen, Dumbbell, Languages, Palette, Target, Star,
-  Clock, Loader2, AlertCircle
+  Clock, Loader2, AlertCircle, Calendar, Repeat, CalendarDays
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
@@ -29,6 +29,14 @@ const INTENT_COLORS = {
   general: 'border-gray-500 bg-gray-500/10'
 }
 
+const SCHEDULE_OPTIONS = [
+  { value: 'today', label: 'Just Today', icon: Calendar, desc: 'One-time task' },
+  { value: 'daily', label: 'Every Day', icon: Repeat, desc: 'Repeats daily' },
+  { value: 'weekdays', label: 'Weekdays', icon: CalendarDays, desc: 'Mon-Fri' },
+  { value: 'weekends', label: 'Weekends', icon: CalendarDays, desc: 'Sat-Sun' },
+  { value: 'custom', label: 'Custom', icon: CalendarDays, desc: 'Pick days' },
+]
+
 export default function CreateTrackPage() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
@@ -42,7 +50,10 @@ export default function CreateTrackPage() {
     intent: '',
     difficulty_pref: 3,
     time_budget_min: 30,
-    days_active: ['mon', 'tue', 'wed', 'thu', 'fri'],
+    schedule_type: 'daily',
+    days_active: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+    scheduled_time: '',
+    is_one_time: false,
     constraints: ''
   })
 
@@ -51,11 +62,42 @@ export default function CreateTrackPage() {
     setStep(2)
   }
 
+  const handleScheduleSelect = (scheduleType) => {
+    let days = []
+    let isOneTime = false
+
+    switch (scheduleType) {
+      case 'today':
+        days = []
+        isOneTime = true
+        break
+      case 'daily':
+        days = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+        break
+      case 'weekdays':
+        days = ['mon', 'tue', 'wed', 'thu', 'fri']
+        break
+      case 'weekends':
+        days = ['sat', 'sun']
+        break
+      case 'custom':
+        days = formData.days_active.length > 0 ? formData.days_active : ['mon', 'wed', 'fri']
+        break
+    }
+
+    setFormData({
+      ...formData,
+      schedule_type: scheduleType,
+      days_active: days,
+      is_one_time: isOneTime
+    })
+  }
+
   const handleDayToggle = (day) => {
     const days = formData.days_active.includes(day)
       ? formData.days_active.filter(d => d !== day)
       : [...formData.days_active, day]
-    setFormData({ ...formData, days_active: days })
+    setFormData({ ...formData, days_active: days, schedule_type: 'custom' })
   }
 
   const handleSubmit = async (e) => {
@@ -67,7 +109,7 @@ export default function CreateTrackPage() {
       return
     }
 
-    if (formData.days_active.length === 0) {
+    if (!formData.is_one_time && formData.days_active.length === 0) {
       setError('Select at least one active day')
       return
     }
@@ -100,22 +142,27 @@ export default function CreateTrackPage() {
         intent: formData.intent,
         difficulty_pref: formData.difficulty_pref,
         time_budget_min: formData.time_budget_min,
-        days_active: formData.days_active,
+        days_active: formData.is_one_time ? [] : formData.days_active,
+        scheduled_time: formData.scheduled_time || null,
+        is_one_time: formData.is_one_time,
+        one_time_date: formData.is_one_time ? new Date().toISOString().split('T')[0] : null,
         constraints: formData.constraints.trim(),
         is_paused: false
       })
 
-      // Create streak for this track
-      localStore.insert(TABLES.STREAKS, {
-        user_id: user.id,
-        track_id: newTrack.id,
-        is_global: false,
-        current_streak: 0,
-        best_streak: 0
-      })
+      // Create streak for this track (only for recurring)
+      if (!formData.is_one_time) {
+        localStore.insert(TABLES.STREAKS, {
+          user_id: user.id,
+          track_id: newTrack.id,
+          is_global: false,
+          current_streak: 0,
+          best_streak: 0
+        })
+      }
 
-      toast.success('Track created! Your first quest will appear on the home page.')
-      navigate('/tracks')
+      toast.success(formData.is_one_time ? 'Task created for today!' : 'Track created!')
+      navigate('/')
     } catch (err) {
       setError('Failed to create track. Please try again.')
       setLoading(false)
@@ -127,214 +174,294 @@ export default function CreateTrackPage() {
       {/* Header */}
       <header className="px-4 py-6 pt-safe-top">
         <button
-          onClick={() => step === 1 ? navigate(-1) : setStep(1)}
+          onClick={() => step === 1 ? navigate(-1) : setStep(step - 1)}
           className="flex items-center gap-2 text-dark-muted hover:text-white mb-4"
         >
           <ArrowLeft className="w-5 h-5" />
-          {step === 1 ? 'Back' : 'Change Type'}
+          Back
         </button>
         <h1 className="text-2xl font-display font-bold text-white">
-          Create New Track
+          {step === 1 ? 'New Task' : step === 2 ? 'Details' : 'Schedule'}
         </h1>
         <p className="text-dark-muted mt-1">
-          {step === 1 ? 'What type of goal is this?' : 'Set up your track details'}
+          {step === 1 && 'What type of activity?'}
+          {step === 2 && 'Name and describe your task'}
+          {step === 3 && 'When do you want to do this?'}
         </p>
+
+        {/* Progress dots */}
+        <div className="flex gap-2 mt-4">
+          {[1, 2, 3].map(s => (
+            <div
+              key={s}
+              className={cn(
+                "h-1 flex-1 rounded-full transition-all",
+                s <= step ? "bg-primary-500" : "bg-dark-border"
+              )}
+            />
+          ))}
+        </div>
       </header>
 
       <main className="px-4">
         {/* Step 1: Select Intent */}
-        {step === 1 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="grid grid-cols-2 gap-3"
-          >
-            {INTENTS.map((intent) => (
-              <motion.button
-                key={intent.value}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleIntentSelect(intent.value)}
-                className={cn(
-                  "card-hover p-4 text-left",
-                  formData.intent === intent.value && INTENT_COLORS[intent.value]
-                )}
-              >
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
-                  `bg-${intent.color}-500/20`
-                )}>
-                  <intent.icon className={`w-5 h-5 text-${intent.color}-400`} />
+        <AnimatePresence mode="wait">
+          {step === 1 && (
+            <motion.div
+              key="step1"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="grid grid-cols-2 gap-3"
+            >
+              {INTENTS.map((intent) => (
+                <motion.button
+                  key={intent.value}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleIntentSelect(intent.value)}
+                  className={cn(
+                    "card-hover p-4 text-left",
+                    formData.intent === intent.value && INTENT_COLORS[intent.value]
+                  )}
+                >
+                  <div className={cn(
+                    "w-10 h-10 rounded-xl flex items-center justify-center mb-3",
+                    `bg-${intent.color}-500/20`
+                  )}>
+                    <intent.icon className={`w-5 h-5 text-${intent.color}-400`} />
+                  </div>
+                  <h3 className="font-semibold text-white">{intent.label}</h3>
+                  <p className="text-xs text-dark-muted mt-1">{intent.desc}</p>
+                </motion.button>
+              ))}
+            </motion.div>
+          )}
+
+          {/* Step 2: Name & Description */}
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="space-y-5"
+            >
+              {/* Selected intent badge */}
+              <div className={cn("card p-3", INTENT_COLORS[formData.intent])}>
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const intent = INTENTS.find(i => i.value === formData.intent)
+                    const Icon = intent?.icon || Star
+                    return (
+                      <>
+                        <Icon className={`w-5 h-5 text-${intent?.color || 'gray'}-400`} />
+                        <span className="font-medium text-white">{intent?.label}</span>
+                      </>
+                    )
+                  })()}
                 </div>
-                <h3 className="font-semibold text-white">{intent.label}</h3>
-                <p className="text-xs text-dark-muted mt-1">{intent.desc}</p>
-              </motion.button>
-            ))}
-          </motion.div>
-        )}
-
-        {/* Step 2: Track Details */}
-        {step === 2 && (
-          <motion.form
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            onSubmit={handleSubmit}
-            className="space-y-6"
-          >
-            {/* Selected intent badge */}
-            <div className={cn("card p-3", INTENT_COLORS[formData.intent])}>
-              <div className="flex items-center gap-3">
-                {(() => {
-                  const intent = INTENTS.find(i => i.value === formData.intent)
-                  const Icon = intent?.icon || Star
-                  return (
-                    <>
-                      <Icon className={`w-5 h-5 text-${intent?.color || 'gray'}-400`} />
-                      <span className="font-medium text-white">{intent?.label} Track</span>
-                    </>
-                  )
-                })()}
               </div>
-            </div>
 
-            {/* Track name */}
-            <div>
-              <label className="label">Track Name *</label>
-              <input
-                type="text"
-                className="input"
-                placeholder="e.g., FIN103 Study, French, Morning Yoga"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                maxLength={100}
-              />
-              <p className="text-xs text-dark-muted mt-1">
-                Give your track a clear, specific name
-              </p>
-            </div>
+              {/* Track name */}
+              <div>
+                <label className="label">What are you working on? *</label>
+                <input
+                  type="text"
+                  className="input text-lg"
+                  placeholder="e.g., Finish essay, Learn React, Leg day"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  maxLength={100}
+                  autoFocus
+                />
+              </div>
 
-            {/* Description */}
-            <div>
-              <label className="label">Description</label>
-              <textarea
-                className="input min-h-[80px]"
-                placeholder="Describe your activity in more detail. This helps generate better quests."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                maxLength={500}
-              />
-              <p className="text-xs text-dark-muted mt-1">
-                E.g., "Reviewing chapters 1-5 for midterm" or "Learning vocabulary and grammar"
-              </p>
-            </div>
+              {/* Description */}
+              <div>
+                <label className="label">More details (optional)</label>
+                <textarea
+                  className="input min-h-[80px]"
+                  placeholder="Add details for better task suggestions..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  maxLength={500}
+                />
+                <p className="text-xs text-dark-muted mt-1">
+                  Better descriptions = smarter quest suggestions
+                </p>
+              </div>
 
-            {/* Time budget */}
-            <div>
-              <label className="label">Daily Time Budget</label>
-              <div className="flex items-center gap-3">
+              {/* Time budget */}
+              <div>
+                <label className="label">How long? ({formData.time_budget_min} min)</label>
                 <input
                   type="range"
-                  min={10}
+                  min={5}
                   max={120}
                   step={5}
                   value={formData.time_budget_min}
                   onChange={(e) => setFormData({ ...formData, time_budget_min: parseInt(e.target.value) })}
-                  className="flex-1 accent-primary-500"
+                  className="w-full accent-primary-500"
                 />
-                <span className="w-20 text-center font-mono text-white bg-dark-surface px-3 py-2 rounded-lg">
-                  {formData.time_budget_min} min
-                </span>
+                <div className="flex justify-between text-xs text-dark-muted mt-1">
+                  <span>5 min</span>
+                  <span>2 hours</span>
+                </div>
               </div>
-            </div>
 
-            {/* Difficulty preference */}
-            <div>
-              <label className="label">Difficulty Preference</label>
-              <div className="grid grid-cols-5 gap-2">
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, difficulty_pref: level })}
-                    className={cn(
-                      "py-2 px-3 rounded-lg text-sm font-medium transition-all",
-                      formData.difficulty_pref === level
-                        ? "bg-primary-500 text-white"
-                        : "bg-dark-surface text-dark-muted hover:text-white"
-                    )}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-dark-muted mt-2 text-center">
-                {DIFFICULTY_LABELS[formData.difficulty_pref]}
-              </p>
-            </div>
+              <button
+                onClick={() => formData.name.trim() ? setStep(3) : setError('Please enter a name')}
+                className="btn-primary w-full py-4"
+              >
+                Continue
+              </button>
+            </motion.div>
+          )}
 
-            {/* Active days */}
-            <div>
-              <label className="label">Active Days</label>
-              <div className="flex justify-between gap-2">
-                {DAYS_OF_WEEK.map((day) => (
-                  <button
-                    key={day.value}
-                    type="button"
-                    onClick={() => handleDayToggle(day.value)}
-                    className={cn(
-                      "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-                      formData.days_active.includes(day.value)
-                        ? "bg-primary-500 text-white"
-                        : "bg-dark-surface text-dark-muted hover:text-white"
-                    )}
-                  >
-                    {day.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Constraints (optional) */}
-            <div>
-              <label className="label">Additional Notes (optional)</label>
-              <textarea
-                className="input min-h-[60px]"
-                placeholder="Any specific constraints or preferences for your quests..."
-                value={formData.constraints}
-                onChange={(e) => setFormData({ ...formData, constraints: e.target.value })}
-                maxLength={200}
-              />
-              {formData.intent === 'fitness' && (
-                <p className="text-xs text-warning-light mt-1">
-                  Note: Focus on wellness goals like strength, mobility, or consistency.
-                </p>
-              )}
-            </div>
-
-            {/* Error message */}
-            {error && (
-              <div className="flex items-center gap-2 text-danger-light bg-danger/10 p-3 rounded-lg">
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                <p className="text-sm">{error}</p>
-              </div>
-            )}
-
-            {/* Submit button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full py-4 text-lg"
+          {/* Step 3: Schedule */}
+          {step === 3 && (
+            <motion.form
+              key="step3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              onSubmit={handleSubmit}
+              className="space-y-5"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                'Create Track'
+              {/* Schedule type selection */}
+              <div className="space-y-2">
+                {SCHEDULE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleScheduleSelect(option.value)}
+                    className={cn(
+                      "w-full flex items-center gap-3 p-4 rounded-xl border transition-all text-left",
+                      formData.schedule_type === option.value
+                        ? "border-primary-500 bg-primary-500/10"
+                        : "border-dark-border bg-dark-surface hover:border-dark-muted"
+                    )}
+                  >
+                    <option.icon className={cn(
+                      "w-5 h-5",
+                      formData.schedule_type === option.value ? "text-primary-400" : "text-dark-muted"
+                    )} />
+                    <div className="flex-1">
+                      <p className="font-medium text-white">{option.label}</p>
+                      <p className="text-xs text-dark-muted">{option.desc}</p>
+                    </div>
+                    <div className={cn(
+                      "w-5 h-5 rounded-full border-2 flex items-center justify-center",
+                      formData.schedule_type === option.value
+                        ? "border-primary-500 bg-primary-500"
+                        : "border-dark-muted"
+                    )}>
+                      {formData.schedule_type === option.value && (
+                        <div className="w-2 h-2 rounded-full bg-white" />
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom days selection */}
+              {formData.schedule_type === 'custom' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="overflow-hidden"
+                >
+                  <label className="label">Select days</label>
+                  <div className="flex justify-between gap-2">
+                    {DAYS_OF_WEEK.map((day) => (
+                      <button
+                        key={day.value}
+                        type="button"
+                        onClick={() => handleDayToggle(day.value)}
+                        className={cn(
+                          "flex-1 py-3 rounded-xl text-sm font-medium transition-all",
+                          formData.days_active.includes(day.value)
+                            ? "bg-primary-500 text-white"
+                            : "bg-dark-surface text-dark-muted hover:text-white"
+                        )}
+                      >
+                        {day.label[0]}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
               )}
-            </button>
-          </motion.form>
-        )}
+
+              {/* Optional: Scheduled time */}
+              {!formData.is_one_time && (
+                <div>
+                  <label className="label">Preferred time (optional)</label>
+                  <input
+                    type="time"
+                    className="input"
+                    value={formData.scheduled_time}
+                    onChange={(e) => setFormData({ ...formData, scheduled_time: e.target.value })}
+                  />
+                  <p className="text-xs text-dark-muted mt-1">
+                    We'll remind you at this time
+                  </p>
+                </div>
+              )}
+
+              {/* Difficulty (simplified) */}
+              <div>
+                <label className="label">Difficulty</label>
+                <div className="flex gap-2">
+                  {[
+                    { value: 1, label: 'Easy' },
+                    { value: 3, label: 'Medium' },
+                    { value: 5, label: 'Hard' }
+                  ].map((level) => (
+                    <button
+                      key={level.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, difficulty_pref: level.value })}
+                      className={cn(
+                        "flex-1 py-2.5 rounded-xl text-sm font-medium transition-all",
+                        formData.difficulty_pref === level.value
+                          ? "bg-primary-500 text-white"
+                          : "bg-dark-surface text-dark-muted hover:text-white"
+                      )}
+                    >
+                      {level.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Error message */}
+              {error && (
+                <div className="flex items-center gap-2 text-danger-light bg-danger/10 p-3 rounded-lg">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full py-4 text-lg"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Creating...
+                  </>
+                ) : formData.is_one_time ? (
+                  'Create Task'
+                ) : (
+                  'Create Track'
+                )}
+              </button>
+            </motion.form>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   )
