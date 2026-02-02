@@ -102,5 +102,13 @@ export const TABLES = {
   FEATURE_FLAGS: 'feature_flags',
   COMMUNITIES: 'communities',
   COMMUNITY_MEMBERS: 'community_members',
-  COMMUNITY_MESSAGES: 'community_messages'
+  COMMUNITY_MESSAGES: 'community_messages',
+  // New tables for journeys and enhanced features
+  JOURNEYS: 'journeys',
+  JOURNEY_QUESTS: 'journey_quests',
+  COMMUNITY_ACTIVITIES: 'community_activities',
+  TASK_PROPOSALS: 'task_proposals',
+  FITNESS_LOGS: 'fitness_logs',
+  ACADEMIC_LOGS: 'academic_logs',
+  WEEKLY_STRIKES: 'weekly_strikes'
 }

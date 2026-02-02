@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Users, Copy, Send, Flame, Trophy,
   CheckCircle2, Shield, Crown, MoreVertical, UserMinus, LogOut, X,
-  Bell, Target, Play, Award
+  Bell, Target, Play, Award, Plus, Check, XCircle, Clock,
+  Trash2, TrendingUp, UserPlus
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
@@ -28,6 +29,14 @@ export default function CommunityDetailPage() {
 
   const [newMessage, setNewMessage] = useState('')
   const [showSettings, setShowSettings] = useState(false)
+  const [proposals, setProposals] = useState([])
+  const [showProposeTask, setShowProposeTask] = useState(false)
+  const [proposalForm, setProposalForm] = useState({
+    targetUserId: '',
+    taskName: '',
+    description: '',
+    time_budget_min: 30
+  })
 
   useEffect(() => {
     if (user) loadCommunity()
@@ -95,7 +104,81 @@ export default function CommunityDetailPage() {
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
     setMessages(communityMessages)
 
+    // Load task proposals
+    const communityProposals = localStore.query(TABLES.TASK_PROPOSALS, p => p.community_id === id)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    setProposals(communityProposals)
+
     setLoading(false)
+  }
+
+  const handleProposeTask = () => {
+    if (!proposalForm.targetUserId || !proposalForm.taskName.trim()) {
+      toast.error('Select a member and enter a task name')
+      return
+    }
+
+    const proposal = {
+      community_id: id,
+      from_user_id: user.id,
+      to_user_id: proposalForm.targetUserId,
+      task_name: proposalForm.taskName.trim(),
+      description: proposalForm.description.trim(),
+      time_budget_min: proposalForm.time_budget_min,
+      status: 'pending'
+    }
+
+    localStore.insert(TABLES.TASK_PROPOSALS, proposal)
+
+    // Add activity message
+    const targetProfile = memberProfiles[proposalForm.targetUserId]
+    localStore.insert(TABLES.COMMUNITY_MESSAGES, {
+      community_id: id,
+      user_id: user.id,
+      content: `proposed a task for ${targetProfile?.username || 'someone'}`,
+      message_type: 'proposal'
+    })
+
+    loadCommunity()
+    setShowProposeTask(false)
+    setProposalForm({ targetUserId: '', taskName: '', description: '', time_budget_min: 30 })
+    toast.success('Task proposed!')
+  }
+
+  const handleAcceptProposal = (proposal) => {
+    // Create the track
+    const track = {
+      user_id: user.id,
+      name: proposal.task_name,
+      description: proposal.description || `Proposed by ${memberProfiles[proposal.from_user_id]?.username}`,
+      intent: 'general',
+      time_budget_min: proposal.time_budget_min,
+      difficulty_pref: 3,
+      days_active: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+      is_paused: false
+    }
+
+    localStore.insert(TABLES.TRACKS, track)
+
+    // Update proposal status
+    localStore.update(TABLES.TASK_PROPOSALS, proposal.id, { status: 'accepted' })
+
+    // Add activity message
+    localStore.insert(TABLES.COMMUNITY_MESSAGES, {
+      community_id: id,
+      user_id: user.id,
+      content: `accepted the task "${proposal.task_name}"`,
+      message_type: 'quest_created'
+    })
+
+    loadCommunity()
+    toast.success('Task added to your tracks!')
+  }
+
+  const handleDeclineProposal = (proposal) => {
+    localStore.update(TABLES.TASK_PROPOSALS, proposal.id, { status: 'declined' })
+    loadCommunity()
+    toast.success('Proposal declined')
   }
 
   const scrollToBottom = () => {
@@ -217,40 +300,31 @@ export default function CommunityDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={cn(
-              "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-              activeTab === 'chat'
-                ? "bg-primary-500/20 text-primary-400"
-                : "bg-dark-border/50 text-dark-muted hover:text-white"
-            )}
-          >
-            Chat
-          </button>
-          <button
-            onClick={() => setActiveTab('activity')}
-            className={cn(
-              "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-              activeTab === 'activity'
-                ? "bg-primary-500/20 text-primary-400"
-                : "bg-dark-border/50 text-dark-muted hover:text-white"
-            )}
-          >
-            Activity
-          </button>
-          <button
-            onClick={() => setActiveTab('members')}
-            className={cn(
-              "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-              activeTab === 'members'
-                ? "bg-primary-500/20 text-primary-400"
-                : "bg-dark-border/50 text-dark-muted hover:text-white"
-            )}
-          >
-            Members
-          </button>
+        <div className="flex gap-1 mt-3">
+          {['chat', 'activity', 'proposals', 'members'].map(tab => {
+            const pendingCount = tab === 'proposals'
+              ? proposals.filter(p => p.to_user_id === user.id && p.status === 'pending').length
+              : 0
+            return (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={cn(
+                  "flex-1 py-2 rounded-lg text-sm font-medium transition-all relative",
+                  activeTab === tab
+                    ? "bg-primary-500/20 text-primary-400"
+                    : "bg-dark-border/50 text-dark-muted hover:text-white"
+                )}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                {pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-danger-light text-white text-xs rounded-full flex items-center justify-center">
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       </header>
 
@@ -392,6 +466,112 @@ export default function CommunityDetailPage() {
         </div>
       )}
 
+      {/* Proposals Tab */}
+      {activeTab === 'proposals' && (
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Propose Task Button */}
+          <button
+            onClick={() => setShowProposeTask(true)}
+            className="w-full btn-primary mb-4"
+          >
+            <Plus className="w-5 h-5" />
+            Propose a Task
+          </button>
+
+          {/* Pending Proposals for Me */}
+          {proposals.filter(p => p.to_user_id === user.id && p.status === 'pending').length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-white mb-3">Pending for You</h3>
+              <div className="space-y-3">
+                {proposals
+                  .filter(p => p.to_user_id === user.id && p.status === 'pending')
+                  .map(proposal => {
+                    const fromProfile = memberProfiles[proposal.from_user_id]
+                    return (
+                      <motion.div
+                        key={proposal.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-dark-surface rounded-xl p-4 border border-primary-500/30"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h4 className="font-medium text-white">{proposal.task_name}</h4>
+                            <p className="text-xs text-dark-muted">
+                              From @{fromProfile?.username || 'Unknown'} • {proposal.time_budget_min} min
+                            </p>
+                          </div>
+                          <Clock className="w-5 h-5 text-yellow-400" />
+                        </div>
+                        {proposal.description && (
+                          <p className="text-sm text-dark-muted mb-3">{proposal.description}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAcceptProposal(proposal)}
+                            className="flex-1 btn-primary py-2 text-sm"
+                          >
+                            <Check className="w-4 h-4" />
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => handleDeclineProposal(proposal)}
+                            className="flex-1 btn-secondary py-2 text-sm"
+                          >
+                            <XCircle className="w-4 h-4" />
+                            Decline
+                          </button>
+                        </div>
+                      </motion.div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* My Proposals */}
+          {proposals.filter(p => p.from_user_id === user.id).length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-white mb-3">Your Proposals</h3>
+              <div className="space-y-2">
+                {proposals
+                  .filter(p => p.from_user_id === user.id)
+                  .map(proposal => {
+                    const toProfile = memberProfiles[proposal.to_user_id]
+                    return (
+                      <div
+                        key={proposal.id}
+                        className="bg-dark-surface rounded-xl p-3 flex items-center justify-between"
+                      >
+                        <div>
+                          <p className="text-sm text-white">{proposal.task_name}</p>
+                          <p className="text-xs text-dark-muted">To @{toProfile?.username || 'Unknown'}</p>
+                        </div>
+                        <span className={cn(
+                          "text-xs px-2 py-1 rounded-full",
+                          proposal.status === 'pending' && "bg-yellow-500/20 text-yellow-400",
+                          proposal.status === 'accepted' && "bg-green-500/20 text-green-400",
+                          proposal.status === 'declined' && "bg-red-500/20 text-red-400"
+                        )}>
+                          {proposal.status}
+                        </span>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          )}
+
+          {proposals.length === 0 && (
+            <div className="text-center py-12">
+              <Target className="w-12 h-12 text-dark-muted mx-auto mb-3" />
+              <p className="text-dark-muted">No proposals yet</p>
+              <p className="text-xs text-dark-muted mt-1">Propose tasks to help your friends stay accountable!</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Members Tab */}
       {activeTab === 'members' && (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -475,6 +655,113 @@ export default function CommunityDetailPage() {
           })}
         </div>
       )}
+
+      {/* Propose Task Modal */}
+      <AnimatePresence>
+        {showProposeTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowProposeTask(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-dark-surface w-full max-w-sm rounded-2xl p-5 border border-dark-border"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white">Propose a Task</h3>
+                <button
+                  onClick={() => setShowProposeTask(false)}
+                  className="p-1 text-dark-muted hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Select Member */}
+                <div>
+                  <label className="label">Propose to</label>
+                  <select
+                    className="input"
+                    value={proposalForm.targetUserId}
+                    onChange={(e) => setProposalForm({ ...proposalForm, targetUserId: e.target.value })}
+                  >
+                    <option value="">Select a member...</option>
+                    {members.filter(m => m.user_id !== user.id).map(member => {
+                      const memberProfile = memberProfiles[member.user_id]
+                      return (
+                        <option key={member.id} value={member.user_id}>
+                          @{memberProfile?.username || 'Unknown'}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </div>
+
+                {/* Task Name */}
+                <div>
+                  <label className="label">Task Name</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="e.g., Morning workout, Read 20 pages"
+                    value={proposalForm.taskName}
+                    onChange={(e) => setProposalForm({ ...proposalForm, taskName: e.target.value })}
+                    maxLength={100}
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="label">Why? (optional)</label>
+                  <textarea
+                    className="input min-h-[60px]"
+                    placeholder="Add some encouragement or context..."
+                    value={proposalForm.description}
+                    onChange={(e) => setProposalForm({ ...proposalForm, description: e.target.value })}
+                    maxLength={200}
+                  />
+                </div>
+
+                {/* Time */}
+                <div>
+                  <label className="label">Duration ({proposalForm.time_budget_min} min)</label>
+                  <input
+                    type="range"
+                    min={5}
+                    max={120}
+                    step={5}
+                    value={proposalForm.time_budget_min}
+                    onChange={(e) => setProposalForm({ ...proposalForm, time_budget_min: parseInt(e.target.value) })}
+                    className="w-full accent-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowProposeTask(false)}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleProposeTask}
+                  className="btn-primary flex-1"
+                >
+                  Propose
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Settings Modal - Centered */}
       <AnimatePresence>

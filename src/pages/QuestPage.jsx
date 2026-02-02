@@ -4,13 +4,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Clock, Zap, Shield, Play, Pause, Check, X,
   Timer, BookOpen, Dumbbell, Languages, Palette, Target, Star,
-  Share2, Camera, FileText, ChevronDown, Sparkles
+  Share2, Camera, FileText, ChevronDown, Sparkles, Skull, AlertTriangle
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
 import { localStore, TABLES } from '../lib/localStore'
-import { formatMinutes, getRandomCompletionMessage, getRandomMVPMessage, cn, DIFFICULTY_LABELS } from '../lib/utils'
+import {
+  formatMinutes, getRandomCompletionMessage, getRandomStrikeMessage,
+  getRandomDerankMessage, cn, DIFFICULTY_LABELS, getWeekKey,
+  calculateStrikePenalty, calculateDerankXP, getRankFromXP
+} from '../lib/utils'
 
 const INTENT_ICONS = {
   study: BookOpen,
@@ -46,9 +50,20 @@ export default function QuestPage() {
 
   // Completion form
   const [showCompletionForm, setShowCompletionForm] = useState(false)
-  const [completionType, setCompletionType] = useState('full') // full, mvp
+  const [completionType, setCompletionType] = useState('full') // full, strike
   const [reflection, setReflection] = useState('')
   const [minutesSpent, setMinutesSpent] = useState(0)
+  const [showStrikeConfirm, setShowStrikeConfirm] = useState(false)
+
+  // Get weekly strikes used
+  const weekKey = getWeekKey()
+  const weeklyStrikes = localStore.query(TABLES.WEEKLY_STRIKES, s =>
+    s.user_id === user?.id && s.week_key === weekKey
+  )[0]
+  const strikesUsed = weeklyStrikes?.strikes_used || 0
+  const strikeLimit = profile?.strike_limit ?? 3
+  const strikesRemaining = strikeLimit === 0 ? 999 : (strikeLimit === 999 ? 999 : strikeLimit - strikesUsed)
+  const hasStrikesLeft = strikeLimit === 0 || strikeLimit === 999 || strikesRemaining > 0
 
   useEffect(() => {
     loadQuest()
@@ -134,21 +149,11 @@ export default function QuestPage() {
   }
 
   const handleCompleteQuest = async () => {
-    const isMVP = completionType === 'mvp'
-    const xpReward = isMVP ? Math.round(quest.reward_xp * 0.5) : quest.reward_xp
-
-    // If MVP, check and use shield
-    if (isMVP) {
-      if ((profile?.shields_available ?? 0) <= 0) {
-        toast.error('No shields available!')
-        return
-      }
-      await useShield()
-    }
+    const xpReward = quest.reward_xp
 
     // Update quest
     const updated = localStore.update(TABLES.QUESTS, id, {
-      status: isMVP ? 'mvp_completed' : 'completed',
+      status: 'completed',
       completed_at: new Date().toISOString()
     })
     setQuest(updated)
@@ -161,7 +166,7 @@ export default function QuestPage() {
       reflection_text: reflection,
       proof_type: 'none',
       xp_earned: xpReward,
-      used_shield: isMVP
+      used_strike: false
     })
 
     // Award XP
@@ -171,16 +176,74 @@ export default function QuestPage() {
     updateStreaks()
 
     // Celebration!
-    if (!isMVP) {
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 }
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 }
+    })
+    toast.success(getRandomCompletionMessage())
+
+    // Navigate back
+    setTimeout(() => {
+      navigate('/')
+    }, 1500)
+  }
+
+  const handleUseStrike = async () => {
+    // Check if using strike would cause derank (no strikes left)
+    if (!hasStrikesLeft && strikeLimit !== 0 && strikeLimit !== 999) {
+      // Derank the user
+      const penalty = calculateStrikePenalty(profile?.rank || 'Novice')
+      const newXP = Math.max(0, (profile?.xp || 0) - penalty)
+      const newRank = getRankFromXP(newXP)
+
+      await updateProfile({
+        xp: newXP,
+        rank: newRank
       })
-      toast.success(getRandomCompletionMessage())
+
+      // Reset weekly strikes
+      if (weeklyStrikes) {
+        localStore.update(TABLES.WEEKLY_STRIKES, weeklyStrikes.id, { strikes_used: 0 })
+      }
+
+      toast.error(getRandomDerankMessage())
     } else {
-      toast.success(getRandomMVPMessage())
+      // Record the strike usage
+      if (weeklyStrikes) {
+        localStore.update(TABLES.WEEKLY_STRIKES, weeklyStrikes.id, {
+          strikes_used: strikesUsed + 1
+        })
+      } else {
+        localStore.insert(TABLES.WEEKLY_STRIKES, {
+          user_id: user.id,
+          week_key: weekKey,
+          strikes_used: 1
+        })
+      }
+
+      toast(getRandomStrikeMessage(), { icon: '⚡' })
     }
+
+    // Update quest as strike_used
+    const updated = localStore.update(TABLES.QUESTS, id, {
+      status: 'strike_used',
+      completed_at: new Date().toISOString()
+    })
+    setQuest(updated)
+
+    // Log the strike
+    localStore.insert(TABLES.QUEST_LOGS, {
+      quest_id: id,
+      user_id: user.id,
+      minutes_spent: 0,
+      reflection_text: 'Strike used - skipped task',
+      proof_type: 'none',
+      xp_earned: 0,
+      used_strike: true
+    })
+
+    setShowStrikeConfirm(false)
 
     // Navigate back
     setTimeout(() => {
@@ -265,7 +328,7 @@ export default function QuestPage() {
 
   const IntentIcon = INTENT_ICONS[track?.intent] || Star
   const gradientColor = INTENT_COLORS[track?.intent] || INTENT_COLORS.general
-  const isCompleted = quest.status === 'completed' || quest.status === 'mvp_completed'
+  const isCompleted = quest.status === 'completed' || quest.status === 'strike_used'
 
   return (
     <div className="min-h-screen bg-dark-bg">
@@ -321,16 +384,23 @@ export default function QuestPage() {
           <p className="text-dark-muted">{quest.instructions}</p>
         </div>
 
-        {/* MVP Option */}
-        {quest.mvp_instructions && (
-          <div className="card mb-4 border-cyan-500/30">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="w-5 h-5 text-cyan-400" />
-              <h2 className="font-semibold text-white">MVP Fallback</h2>
+        {/* Strike Info */}
+        {strikeLimit !== 0 && strikeLimit !== 999 && (
+          <div className="card mb-4 border-orange-500/30 bg-orange-500/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Skull className="w-5 h-5 text-orange-400" />
+                <span className="font-semibold text-white">Weekly Strikes</span>
+              </div>
+              <span className={cn(
+                "text-lg font-bold",
+                strikesRemaining <= 1 ? "text-danger-light" : "text-orange-400"
+              )}>
+                {strikesRemaining}/{strikeLimit}
+              </span>
             </div>
-            <p className="text-dark-muted text-sm">{quest.mvp_instructions}</p>
-            <p className="text-xs text-cyan-400 mt-2">
-              Complete this instead to save your streak (uses 1 shield)
+            <p className="text-xs text-dark-muted mt-2">
+              Can't complete a task? Use a strike to skip it. Using all strikes causes a rank penalty.
             </p>
           </div>
         )}
@@ -401,14 +471,20 @@ export default function QuestPage() {
                   <Check className="w-6 h-6" />
                   Complete Quest
                 </button>
-                <button
-                  onClick={() => handleShowCompletion('mvp')}
-                  className="btn-secondary w-full py-3 text-cyan-400 border-cyan-500/30"
-                  disabled={(profile?.shields_available ?? 0) <= 0}
-                >
-                  <Shield className="w-5 h-5" />
-                  Complete MVP ({profile?.shields_available ?? 0} shields left)
-                </button>
+                {strikeLimit !== 0 && (
+                  <button
+                    onClick={() => setShowStrikeConfirm(true)}
+                    className={cn(
+                      "btn-secondary w-full py-3",
+                      !hasStrikesLeft && strikeLimit !== 999 ? "text-danger-light border-danger/30" : "text-orange-400 border-orange-500/30"
+                    )}
+                  >
+                    <Skull className="w-5 h-5" />
+                    {!hasStrikesLeft && strikeLimit !== 999
+                      ? "Use Strike (Will Derank!)"
+                      : `Use Strike (${strikesRemaining} left)`}
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -424,9 +500,7 @@ export default function QuestPage() {
               className="card"
             >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-white">
-                  {completionType === 'mvp' ? 'MVP Completion' : 'Quest Complete!'}
-                </h2>
+                <h2 className="font-semibold text-white">Quest Complete!</h2>
                 <button
                   onClick={() => setShowCompletionForm(false)}
                   className="text-dark-muted hover:text-white"
@@ -461,27 +535,93 @@ export default function QuestPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-dark-muted">XP Reward</span>
                     <span className="text-xl font-bold text-primary-400">
-                      +{completionType === 'mvp' ? Math.round(quest.reward_xp * 0.5) : quest.reward_xp} XP
+                      +{quest.reward_xp} XP
                     </span>
                   </div>
-                  {completionType === 'mvp' && (
-                    <p className="text-xs text-cyan-400 mt-2">
-                      Using 1 shield • 50% XP
-                    </p>
-                  )}
                 </div>
 
                 <button
                   onClick={handleCompleteQuest}
-                  className={cn(
-                    "w-full py-4 text-lg",
-                    completionType === 'mvp' ? 'btn-secondary text-cyan-400' : 'btn-success'
-                  )}
+                  className="btn-success w-full py-4 text-lg"
                 >
                   <Sparkles className="w-5 h-5" />
-                  {completionType === 'mvp' ? 'Save Streak with MVP' : 'Complete & Earn XP'}
+                  Complete & Earn XP
                 </button>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Strike Confirmation Modal */}
+        <AnimatePresence>
+          {showStrikeConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+              onClick={() => setShowStrikeConfirm(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-dark-surface w-full max-w-sm rounded-2xl p-5 border border-dark-border"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  {!hasStrikesLeft && strikeLimit !== 999 ? (
+                    <AlertTriangle className="w-8 h-8 text-danger-light" />
+                  ) : (
+                    <Skull className="w-8 h-8 text-orange-400" />
+                  )}
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">
+                      {!hasStrikesLeft && strikeLimit !== 999 ? 'Warning: Derank!' : 'Use Strike?'}
+                    </h3>
+                    <p className="text-sm text-dark-muted">
+                      {!hasStrikesLeft && strikeLimit !== 999
+                        ? 'You have no strikes left!'
+                        : `${strikesRemaining} strike${strikesRemaining !== 1 ? 's' : ''} remaining this week`}
+                    </p>
+                  </div>
+                </div>
+
+                {!hasStrikesLeft && strikeLimit !== 999 ? (
+                  <div className="bg-danger/10 border border-danger/30 rounded-xl p-4 mb-4">
+                    <p className="text-sm text-danger-light mb-2">
+                      Using a strike now will:
+                    </p>
+                    <ul className="text-sm text-dark-muted space-y-1">
+                      <li>• Lose 50% of your rank's XP</li>
+                      <li>• Potentially drop your rank</li>
+                      <li>• Reset your weekly strikes</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-dark-muted mb-4">
+                    Skip this task without losing your streak. Use strikes wisely!
+                  </p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowStrikeConfirm(false)}
+                    className="btn-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUseStrike}
+                    className={cn(
+                      "flex-1",
+                      !hasStrikesLeft && strikeLimit !== 999 ? "btn-danger" : "btn-primary"
+                    )}
+                  >
+                    {!hasStrikesLeft && strikeLimit !== 999 ? 'Accept Penalty' : 'Use Strike'}
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -493,12 +633,21 @@ export default function QuestPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="card text-center py-8"
           >
-            <div className="w-20 h-20 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-10 h-10 text-success-light" />
+            <div className={cn(
+              "w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4",
+              quest.status === 'strike_used' ? "bg-orange-500/20" : "bg-success/20"
+            )}>
+              {quest.status === 'strike_used' ? (
+                <Skull className="w-10 h-10 text-orange-400" />
+              ) : (
+                <Check className="w-10 h-10 text-success-light" />
+              )}
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Quest Completed!</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">
+              {quest.status === 'strike_used' ? 'Strike Used' : 'Quest Completed!'}
+            </h2>
             <p className="text-dark-muted">
-              {quest.status === 'mvp_completed' ? 'Streak saved with MVP' : "Great work on today's quest"}
+              {quest.status === 'strike_used' ? 'Task skipped - back at it tomorrow!' : "Great work on today's quest"}
             </p>
             <button
               onClick={() => navigate('/')}

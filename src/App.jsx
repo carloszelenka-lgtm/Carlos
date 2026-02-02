@@ -20,6 +20,8 @@ import WeeklyPage from './pages/WeeklyPage'
 import SettingsPage from './pages/SettingsPage'
 import CommunityPage from './pages/CommunityPage'
 import CommunityDetailPage from './pages/CommunityDetailPage'
+import JourneysPage from './pages/JourneysPage'
+import JourneyDetailPage from './pages/JourneyDetailPage'
 import AdminPage from './pages/AdminPage'
 import LandingPage from './pages/LandingPage'
 
@@ -102,6 +104,8 @@ function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/community/:id" element={<CommunityDetailPage />} />
+        <Route path="/journeys" element={<JourneysPage />} />
+        <Route path="/journeys/:id" element={<JourneyDetailPage />} />
       </Route>
 
       {/* Admin routes */}

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Clock, Zap, ChevronRight, Play, CheckCircle2, Shield,
+  Clock, Zap, ChevronRight, Play, CheckCircle2, Skull,
   BookOpen, Dumbbell, Languages, Palette, Target, Star
 } from 'lucide-react'
 import { cn, getStatusInfo, formatMinutes, DIFFICULTY_LABELS } from '../../lib/utils'
@@ -31,7 +31,7 @@ export default function QuestCard({ quest, track, onUpdate, compact = false }) {
   const IntentIcon = INTENT_ICONS[track?.intent] || Star
   const gradientColor = INTENT_COLORS[track?.intent] || INTENT_COLORS.general
 
-  const isCompleted = quest.status === 'completed' || quest.status === 'mvp_completed'
+  const isCompleted = quest.status === 'completed' || quest.status === 'strike_used'
   const isInProgress = quest.status === 'in_progress'
 
   const handleClick = () => {
@@ -48,19 +48,24 @@ export default function QuestCard({ quest, track, onUpdate, compact = false }) {
         <div className="flex items-center gap-3">
           <div className={cn(
             "w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br",
-            gradientColor
+            quest.status === 'strike_used' ? "from-orange-500 to-orange-600" : gradientColor
           )}>
-            <CheckCircle2 className="w-5 h-5 text-white" />
+            {quest.status === 'strike_used' ? (
+              <Skull className="w-5 h-5 text-white" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-white" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-medium text-white truncate">{quest.title}</h3>
             <div className="flex items-center gap-2 text-sm text-dark-muted">
-              <span className="text-success-light">+{quest.reward_xp} XP</span>
-              {quest.status === 'mvp_completed' && (
-                <span className="flex items-center gap-1 text-cyan-400">
-                  <Shield className="w-3 h-3" />
-                  MVP
+              {quest.status === 'strike_used' ? (
+                <span className="flex items-center gap-1 text-orange-400">
+                  <Skull className="w-3 h-3" />
+                  Strike Used
                 </span>
+              ) : (
+                <span className="text-success-light">+{quest.reward_xp} XP</span>
               )}
             </div>
           </div>

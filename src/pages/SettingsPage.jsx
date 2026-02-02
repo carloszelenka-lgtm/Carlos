@@ -19,10 +19,10 @@ const STYLES = [
 ]
 
 const STRIKE_OPTIONS = [
-  { value: 0, label: 'Off', desc: 'No strike tracking' },
-  { value: 1, label: '1 Strike', desc: 'Reset after 1 missed day' },
-  { value: 3, label: '3 Strikes', desc: 'Reset after 3 missed days' },
-  { value: 5, label: '5 Strikes', desc: 'More forgiving' }
+  { value: 0, label: 'Off', desc: 'No strike feature' },
+  { value: 1, label: '1 Strike', desc: 'One chance per week' },
+  { value: 3, label: '3 Strikes', desc: 'Standard difficulty' },
+  { value: 999, label: 'Unlimited', desc: 'No penalty for misses' }
 ]
 
 const TIMEZONES = [

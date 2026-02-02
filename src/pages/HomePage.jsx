@@ -12,7 +12,7 @@ import { localStore, TABLES } from '../lib/localStore'
 import { generateDailyQuests } from '../lib/questEngine'
 import {
   formatDate, getRankInfo, getRankProgress, getNextRank,
-  getStatusInfo, getIntentInfo, formatMinutes, cn
+  getStatusInfo, getIntentInfo, formatMinutes, cn, getWeekKey
 } from '../lib/utils'
 import QuestCard from '../components/quests/QuestCard'
 
@@ -74,7 +74,7 @@ export default function HomePage() {
   const nextRankInfo = nextRank ? getRankInfo(nextRank) : null
 
   const pendingQuests = quests.filter(q => q.status === 'pending' || q.status === 'in_progress')
-  const completedQuests = quests.filter(q => q.status === 'completed' || q.status === 'mvp_completed')
+  const completedQuests = quests.filter(q => q.status === 'completed' || q.status === 'strike_used')
 
   const completionRate = quests.length > 0
     ? Math.round((completedQuests.length / quests.length) * 100)
