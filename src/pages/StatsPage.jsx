@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import {
-  Flame, Trophy, Zap, Calendar, TrendingUp, Target,
-  CheckCircle2, Shield, Clock
+  Flame, Trophy, Zap, Calendar, Target,
+  CheckCircle2, Clock, Skull, TrendingUp
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -19,8 +19,8 @@ import {
 import { Line, Bar } from 'react-chartjs-2'
 import { useAuth } from '../contexts/AuthContext'
 import { localStore, TABLES } from '../lib/localStore'
-import { cn, getRankInfo, formatMinutes } from '../lib/utils'
-import { format, subDays, startOfWeek, eachDayOfInterval } from 'date-fns'
+import { cn, getRankInfo, formatMinutes, getWeekKey } from '../lib/utils'
+import { format, subDays } from 'date-fns'
 
 ChartJS.register(
   CategoryScale,
@@ -51,11 +51,15 @@ export default function StatsPage() {
       s.user_id === user.id && s.is_global
     )[0]
 
+    // Get weekly strikes
+    const weekKey = getWeekKey()
+    const weeklyStrikes = localStore.query(TABLES.WEEKLY_STRIKES, s =>
+      s.user_id === user.id && s.week_key === weekKey
+    )[0]
+
     // Calculate stats
-    const completedQuests = allQuests.filter(q =>
-      q.status === 'completed' || q.status === 'mvp_completed'
-    )
-    const mvpCompletions = allQuests.filter(q => q.status === 'mvp_completed')
+    const completedQuests = allQuests.filter(q => q.status === 'completed')
+    const strikeUsedQuests = allQuests.filter(q => q.status === 'strike_used')
     const totalXP = allLogs.reduce((sum, log) => sum + (log.xp_earned || 0), 0)
     const totalMinutes = allLogs.reduce((sum, log) => sum + (log.minutes_spent || 0), 0)
 
@@ -65,16 +69,16 @@ export default function StatsPage() {
       const date = subDays(new Date(), i)
       const dateStr = format(date, 'yyyy-MM-dd')
       const dayQuests = allQuests.filter(q => q.date === dateStr)
-      const completed = dayQuests.filter(q =>
-        q.status === 'completed' || q.status === 'mvp_completed'
-      ).length
+      const completed = dayQuests.filter(q => q.status === 'completed').length
+      const strikes = dayQuests.filter(q => q.status === 'strike_used').length
 
       last7Days.push({
         date: dateStr,
         label: format(date, 'EEE'),
         total: dayQuests.length,
         completed,
-        xp: dayQuests.filter(q => q.status === 'completed' || q.status === 'mvp_completed')
+        strikes,
+        xp: dayQuests.filter(q => q.status === 'completed')
           .reduce((sum, q) => sum + q.reward_xp, 0)
       })
     }
@@ -98,7 +102,9 @@ export default function StatsPage() {
     setStats({
       totalQuests: allQuests.length,
       completedQuests: completedQuests.length,
-      mvpCompletions: mvpCompletions.length,
+      strikesUsed: strikeUsedQuests.length,
+      weeklyStrikesUsed: weeklyStrikes?.strikes_used || 0,
+      strikeLimit: profile?.strike_limit ?? 3,
       totalXP,
       totalMinutes,
       activeTracks: allTracks.filter(t => !t.is_paused).length,
@@ -130,12 +136,18 @@ export default function StatsPage() {
       {
         label: 'Completed',
         data: stats.last7Days.map(d => d.completed),
-        backgroundColor: 'rgba(99, 102, 241, 0.8)',
+        backgroundColor: 'rgba(34, 197, 94, 0.8)',
         borderRadius: 6
       },
       {
-        label: 'Total',
-        data: stats.last7Days.map(d => d.total - d.completed),
+        label: 'Strikes',
+        data: stats.last7Days.map(d => d.strikes),
+        backgroundColor: 'rgba(239, 68, 68, 0.6)',
+        borderRadius: 6
+      },
+      {
+        label: 'Pending',
+        data: stats.last7Days.map(d => Math.max(0, d.total - d.completed - d.strikes)),
         backgroundColor: 'rgba(99, 102, 241, 0.2)',
         borderRadius: 6
       }
@@ -190,21 +202,21 @@ export default function StatsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="card"
+            className="card bg-gradient-to-br from-orange-500/20 to-red-500/10"
           >
             <div className="flex items-center gap-2 mb-2">
               <Flame className="w-5 h-5 text-orange-400" />
               <span className="text-dark-muted text-sm">Current Streak</span>
             </div>
             <p className="text-3xl font-bold text-white">{stats.currentStreak}</p>
-            <p className="text-xs text-dark-muted">Best: {stats.bestStreak}</p>
+            <p className="text-xs text-dark-muted">Best: {stats.bestStreak} days</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.05 }}
-            className="card"
+            className="card bg-gradient-to-br from-primary-500/20 to-purple-500/10"
           >
             <div className="flex items-center gap-2 mb-2">
               <Zap className="w-5 h-5 text-primary-400" />
@@ -220,7 +232,7 @@ export default function StatsPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="card"
+            className="card bg-gradient-to-br from-green-500/20 to-emerald-500/10"
           >
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 className="w-5 h-5 text-success-light" />
@@ -234,25 +246,63 @@ export default function StatsPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="card"
+            className="card bg-gradient-to-br from-red-500/20 to-pink-500/10"
           >
             <div className="flex items-center gap-2 mb-2">
-              <Clock className="w-5 h-5 text-cyan-400" />
-              <span className="text-dark-muted text-sm">Time Invested</span>
+              <Skull className="w-5 h-5 text-red-400" />
+              <span className="text-dark-muted text-sm">Strikes This Week</span>
             </div>
-            <p className="text-3xl font-bold text-white">{formatMinutes(stats.totalMinutes)}</p>
-            <p className="text-xs text-dark-muted">{stats.mvpCompletions} MVP saves</p>
+            <p className="text-3xl font-bold text-white">
+              {stats.strikeLimit === 999 ? stats.weeklyStrikesUsed : `${stats.weeklyStrikesUsed}/${stats.strikeLimit}`}
+            </p>
+            <p className="text-xs text-dark-muted">{stats.strikesUsed} total all time</p>
           </motion.div>
         </div>
+
+        {/* Time invested */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="card bg-gradient-to-r from-cyan-500/10 to-blue-500/10"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="w-5 h-5 text-cyan-400" />
+                <span className="text-dark-muted text-sm">Time Invested</span>
+              </div>
+              <p className="text-3xl font-bold text-white">{formatMinutes(stats.totalMinutes)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-primary-400">{stats.activeTracks}</p>
+              <p className="text-xs text-dark-muted">Active Tracks</p>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Completion chart */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.25 }}
           className="card"
         >
-          <h2 className="font-semibold text-white mb-4">Last 7 Days</h2>
+          <h2 className="font-semibold text-white mb-2">Last 7 Days</h2>
+          <div className="flex gap-4 mb-4 text-xs">
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded bg-green-500"></span>
+              Completed
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded bg-red-500/60"></span>
+              Strikes
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded bg-primary-500/20"></span>
+              Pending
+            </span>
+          </div>
           <div className="h-48">
             <Bar data={completionChartData} options={{
               ...chartOptions,
@@ -269,7 +319,7 @@ export default function StatsPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
+          transition={{ delay: 0.3 }}
           className="card"
         >
           <h2 className="font-semibold text-white mb-4">XP Trend (30 Days)</h2>
@@ -278,11 +328,11 @@ export default function StatsPage() {
           </div>
         </motion.div>
 
-        {/* More stats */}
+        {/* All time stats */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.35 }}
           className="card"
         >
           <h2 className="font-semibold text-white mb-3">All Time</h2>
@@ -303,10 +353,17 @@ export default function StatsPage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-dark-muted flex items-center gap-2">
-                <Shield className="w-4 h-4" />
-                MVP Completions
+                <CheckCircle2 className="w-4 h-4" />
+                Quests Completed
               </span>
-              <span className="text-white font-medium">{stats.mvpCompletions}</span>
+              <span className="text-white font-medium">{stats.completedQuests}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-dark-muted flex items-center gap-2">
+                <Skull className="w-4 h-4" />
+                Strikes Used
+              </span>
+              <span className="text-white font-medium">{stats.strikesUsed}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-dark-muted flex items-center gap-2">

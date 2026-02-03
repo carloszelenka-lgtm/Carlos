@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Users, Copy, Send, Flame, Trophy,
-  CheckCircle2, Shield, Crown, MoreVertical, UserMinus, LogOut, X,
+  CheckCircle2, Crown, MoreVertical, UserMinus, LogOut, X,
   Bell, Target, Play, Award, Plus, Check, XCircle, Clock,
-  Trash2, TrendingUp, UserPlus
+  Trash2, TrendingUp, UserPlus, Skull, Volume2, VolumeX
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../contexts/AuthContext'
@@ -31,6 +31,10 @@ export default function CommunityDetailPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [proposals, setProposals] = useState([])
   const [showProposeTask, setShowProposeTask] = useState(false)
+  const [muteActivityInChat, setMuteActivityInChat] = useState(() => {
+    const saved = localStorage.getItem(`streakos_mute_activity_${id}`)
+    return saved === 'true'
+  })
   const [proposalForm, setProposalForm] = useState({
     taskName: '',
     description: '',
@@ -257,9 +261,16 @@ export default function CommunityDetailPage() {
       case 'quest_started': return <Play className="w-4 h-4 text-yellow-400" />
       case 'quest_completed': return <CheckCircle2 className="w-4 h-4 text-green-400" />
       case 'streak': return <Flame className="w-4 h-4 text-orange-400" />
+      case 'strike': return <Skull className="w-4 h-4 text-red-400" />
       case 'rank_up': return <Award className="w-4 h-4 text-purple-400" />
+      case 'proposal': return <Target className="w-4 h-4 text-cyan-400" />
       default: return <Bell className="w-4 h-4 text-primary-400" />
     }
+  }
+
+  // Check if message is an activity announcement
+  const isActivityMessage = (type) => {
+    return ['quest_created', 'quest_started', 'quest_completed', 'streak', 'strike', 'rank_up', 'proposal'].includes(type)
   }
 
   if (loading || !community) {
@@ -343,63 +354,115 @@ export default function CommunityDetailPage() {
       {activeTab === 'chat' && (
         <>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* Mute toggle */}
+            <div className="flex justify-end mb-2">
+              <button
+                onClick={() => {
+                  const newValue = !muteActivityInChat
+                  setMuteActivityInChat(newValue)
+                  localStorage.setItem(`streakos_mute_activity_${id}`, newValue.toString())
+                  toast.success(newValue ? 'Activity muted in chat' : 'Activity shown in chat')
+                }}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all",
+                  muteActivityInChat
+                    ? "bg-red-500/20 text-red-400"
+                    : "bg-dark-surface text-dark-muted hover:text-white"
+                )}
+              >
+                {muteActivityInChat ? <VolumeX className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                {muteActivityInChat ? 'Unmute Activity' : 'Mute Activity'}
+              </button>
+            </div>
+
             {messages.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-dark-muted">No messages yet. Say hi! 👋</p>
               </div>
             ) : (
-              messages.filter(m => m.message_type === 'text' || m.message_type === 'system').map((message) => {
-                const isOwn = message.user_id === user.id
-                const senderProfile = memberProfiles[message.user_id]
-                const isSystem = message.message_type === 'system'
+              messages
+                .filter(m => {
+                  // Always show text and system messages
+                  if (m.message_type === 'text' || m.message_type === 'system') return true
+                  // Show activity messages if not muted
+                  if (!muteActivityInChat && isActivityMessage(m.message_type)) return true
+                  return false
+                })
+                .map((message) => {
+                  const isOwn = message.user_id === user.id
+                  const senderProfile = memberProfiles[message.user_id]
+                  const isSystem = message.message_type === 'system'
+                  const isActivity = isActivityMessage(message.message_type)
 
-                if (isSystem) {
-                  return (
-                    <div key={message.id} className="text-center py-2">
-                      <span className="text-xs text-dark-muted bg-dark-surface/50 px-3 py-1.5 rounded-full">
-                        {message.content}
-                      </span>
-                    </div>
-                  )
-                }
-
-                return (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={cn("flex gap-2", isOwn && "flex-row-reverse")}
-                  >
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                      isOwn ? "bg-primary-500" : "bg-dark-surface"
-                    )}>
-                      <span className={cn(
-                        "text-sm font-medium",
-                        isOwn ? "text-white" : "text-dark-muted"
-                      )}>
-                        {(senderProfile?.username || 'U')[0].toUpperCase()}
-                      </span>
-                    </div>
-                    <div className={cn("max-w-[75%]", isOwn && "text-right")}>
-                      {!isOwn && (
-                        <p className="text-xs text-dark-muted mb-1 ml-1">
-                          {senderProfile?.username || 'Unknown'}
-                        </p>
-                      )}
-                      <div className={cn(
-                        "px-4 py-2.5 rounded-2xl inline-block text-left",
-                        isOwn
-                          ? "bg-primary-500 text-white rounded-br-sm"
-                          : "bg-dark-surface text-dark-text rounded-bl-sm"
-                      )}>
-                        <p className="text-sm leading-relaxed">{message.content}</p>
+                  if (isSystem) {
+                    return (
+                      <div key={message.id} className="text-center py-2">
+                        <span className="text-xs text-dark-muted bg-dark-surface/50 px-3 py-1.5 rounded-full">
+                          {message.content}
+                        </span>
                       </div>
-                      <p className={cn(
-                        "text-[10px] text-dark-muted mt-1",
-                        isOwn ? "mr-1" : "ml-1"
+                    )
+                  }
+
+                  // Activity message - special styled announcement
+                  if (isActivity) {
+                    return (
+                      <motion.div
+                        key={message.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex justify-center py-1"
+                      >
+                        <div className="flex items-center gap-2 px-4 py-2 bg-dark-surface/80 border border-dark-border rounded-full">
+                          {getActivityIcon(message.message_type)}
+                          <span className="text-xs">
+                            <span className="font-medium text-white">{senderProfile?.username || 'Someone'}</span>
+                            {' '}
+                            <span className="text-dark-muted">{message.content}</span>
+                          </span>
+                        </div>
+                      </motion.div>
+                    )
+                  }
+
+                  // Regular chat message
+                  return (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={cn("flex gap-2", isOwn && "flex-row-reverse")}
+                    >
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
+                        isOwn ? "bg-primary-500" : "bg-dark-surface"
                       )}>
-                        {formatTimeAgo(message.created_at)}
+                        <span className={cn(
+                          "text-sm font-medium",
+                          isOwn ? "text-white" : "text-dark-muted"
+                        )}>
+                          {(senderProfile?.username || 'U')[0].toUpperCase()}
+                        </span>
+                      </div>
+                      <div className={cn("max-w-[75%]", isOwn && "text-right")}>
+                        {!isOwn && (
+                          <p className="text-xs text-dark-muted mb-1 ml-1">
+                            {senderProfile?.username || 'Unknown'}
+                          </p>
+                        )}
+                        <div className={cn(
+                          "px-4 py-2.5 rounded-2xl inline-block text-left",
+                          isOwn
+                            ? "bg-primary-500 text-white rounded-br-sm"
+                            : "bg-dark-surface text-dark-text rounded-bl-sm"
+                        )}>
+                          <p className="text-sm leading-relaxed">{message.content}</p>
+                        </div>
+                        <p className={cn(
+                          "text-[10px] text-dark-muted mt-1",
+                          isOwn ? "mr-1" : "ml-1"
+                        )}>
+                          {formatTimeAgo(message.created_at)}
                       </p>
                     </div>
                   </motion.div>

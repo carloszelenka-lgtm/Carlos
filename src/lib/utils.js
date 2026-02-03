@@ -135,10 +135,17 @@ export const getRankFromXP = (xp) => {
   return 'Novice'
 }
 
-// Calculate XP penalty when using all strikes (50% of rank's total XP)
+// Calculate XP penalty for a single strike (10% of rank's total XP range)
+export const calculateSingleStrikePenalty = (rank) => {
+  const info = getRankInfo(rank)
+  const rankXP = info.xpMax === Infinity ? 50000 : (info.xpMax - info.xpMin + 1)
+  return Math.floor(rankXP * 0.1)
+}
+
+// Calculate XP penalty when ALL strikes are exhausted (50% of rank's total XP)
 export const calculateStrikePenalty = (rank) => {
   const info = getRankInfo(rank)
-  const rankXP = info.xpMax === Infinity ? 50000 : (info.xpMax - info.xpMin)
+  const rankXP = info.xpMax === Infinity ? 50000 : (info.xpMax - info.xpMin + 1)
   return Math.floor(rankXP * 0.5)
 }
 

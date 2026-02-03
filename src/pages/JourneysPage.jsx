@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Plus, Crown, Dumbbell, GraduationCap, Palette, Languages,
-  ChevronRight, Lock, Flame, Target, TrendingUp, BarChart3
+  Plus, Dumbbell, GraduationCap, Palette, Languages,
+  ChevronRight, Flame, Target, TrendingUp
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { localStore, TABLES } from '../lib/localStore'
@@ -31,8 +31,6 @@ export default function JourneysPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedType, setSelectedType] = useState(null)
   const [journeyName, setJourneyName] = useState('')
-
-  const isPro = profile?.is_pro
 
   useEffect(() => {
     if (user) loadJourneys()
@@ -62,53 +60,6 @@ export default function JourneysPage() {
     setShowCreateModal(false)
     setSelectedType(null)
     setJourneyName('')
-  }
-
-  if (!isPro) {
-    return (
-      <div className="min-h-screen pb-4">
-        <header className="px-4 py-6 pt-safe-top">
-          <h1 className="text-2xl font-display font-bold text-white">Journeys</h1>
-          <p className="text-dark-muted text-sm">Deep tracking for your goals</p>
-        </header>
-
-        <main className="px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card text-center py-12 bg-gradient-to-br from-primary-900/50 to-purple-900/50 border-primary-500/30"
-          >
-            <div className="w-20 h-20 bg-primary-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-10 h-10 text-primary-400" />
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">
-              Pro Feature
-            </h3>
-            <p className="text-dark-muted mb-6 max-w-sm mx-auto">
-              Journeys let you create focused paths for fitness, academics, creativity, or language learning with specialized tracking and insights.
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 mb-6 max-w-sm mx-auto">
-              {Object.entries(JOURNEY_TYPES).map(([key, type]) => {
-                const Icon = JOURNEY_ICONS[key]
-                const colors = JOURNEY_COLORS[key]
-                return (
-                  <div key={key} className={cn("p-3 rounded-xl", colors.bg)}>
-                    <Icon className={cn("w-6 h-6 mx-auto mb-1", colors.text)} />
-                    <p className="text-sm text-white font-medium">{type.label}</p>
-                  </div>
-                )
-              })}
-            </div>
-
-            <Link to="/settings" className="btn-primary inline-flex">
-              <Crown className="w-5 h-5" />
-              Upgrade to Pro
-            </Link>
-          </motion.div>
-        </main>
-      </div>
-    )
   }
 
   if (loading) {

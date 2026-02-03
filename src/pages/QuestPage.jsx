@@ -13,7 +13,7 @@ import { localStore, TABLES } from '../lib/localStore'
 import {
   formatMinutes, getRandomCompletionMessage, getRandomStrikeMessage,
   getRandomDerankMessage, cn, DIFFICULTY_LABELS, getWeekKey,
-  calculateStrikePenalty, calculateDerankXP, getRankFromXP
+  calculateStrikePenalty, calculateSingleStrikePenalty, getRankFromXP
 } from '../lib/utils'
 
 const INTENT_ICONS = {
@@ -210,26 +210,49 @@ export default function QuestPage() {
   }
 
   const handleUseStrike = async () => {
-    // Check if using strike would cause derank (no strikes left)
-    if (!hasStrikesLeft && strikeLimit !== 0 && strikeLimit !== 999) {
-      // Derank the user
-      const penalty = calculateStrikePenalty(profile?.rank || 'Novice')
-      const newXP = Math.max(0, (profile?.xp || 0) - penalty)
+    // Always apply 10% XP penalty for using a strike (unless unlimited strikes)
+    if (strikeLimit !== 0 && strikeLimit !== 999) {
+      const singlePenalty = calculateSingleStrikePenalty(profile?.rank || 'Novice')
+      let totalPenalty = singlePenalty
+
+      // Check if this strike exhausts all strikes - apply additional 50% penalty
+      if (!hasStrikesLeft) {
+        const exhaustedPenalty = calculateStrikePenalty(profile?.rank || 'Novice')
+        totalPenalty += exhaustedPenalty
+
+        // Reset weekly strikes after exhaustion penalty
+        if (weeklyStrikes) {
+          localStore.update(TABLES.WEEKLY_STRIKES, weeklyStrikes.id, { strikes_used: 0 })
+        }
+
+        toast.error(getRandomDerankMessage())
+      } else {
+        // Record the strike usage
+        if (weeklyStrikes) {
+          localStore.update(TABLES.WEEKLY_STRIKES, weeklyStrikes.id, {
+            strikes_used: strikesUsed + 1
+          })
+        } else {
+          localStore.insert(TABLES.WEEKLY_STRIKES, {
+            user_id: user.id,
+            week_key: weekKey,
+            strikes_used: 1
+          })
+        }
+
+        toast(getRandomStrikeMessage(), { icon: '💀' })
+      }
+
+      // Apply the XP penalty
+      const newXP = Math.max(0, (profile?.xp || 0) - totalPenalty)
       const newRank = getRankFromXP(newXP)
 
       await updateProfile({
         xp: newXP,
         rank: newRank
       })
-
-      // Reset weekly strikes
-      if (weeklyStrikes) {
-        localStore.update(TABLES.WEEKLY_STRIKES, weeklyStrikes.id, { strikes_used: 0 })
-      }
-
-      toast.error(getRandomDerankMessage())
     } else {
-      // Record the strike usage
+      // No penalty for unlimited strikes mode
       if (weeklyStrikes) {
         localStore.update(TABLES.WEEKLY_STRIKES, weeklyStrikes.id, {
           strikes_used: strikesUsed + 1
@@ -242,7 +265,7 @@ export default function QuestPage() {
         })
       }
 
-      toast(getRandomStrikeMessage(), { icon: '⚡' })
+      toast(getRandomStrikeMessage(), { icon: '💀' })
     }
 
     // Update quest as strike_used
@@ -264,7 +287,7 @@ export default function QuestPage() {
     })
 
     // Announce strike to communities
-    broadcastToCommunities(`used a strike on "${track?.name || quest?.title}"`, 'streak')
+    broadcastToCommunities(`used a strike on "${track?.name || quest?.title}"`, 'strike')
 
     setShowStrikeConfirm(false)
 
