@@ -32,7 +32,6 @@ export default function CommunityDetailPage() {
   const [proposals, setProposals] = useState([])
   const [showProposeTask, setShowProposeTask] = useState(false)
   const [proposalForm, setProposalForm] = useState({
-    targetUserId: '',
     taskName: '',
     description: '',
     time_budget_min: 30
@@ -113,44 +112,43 @@ export default function CommunityDetailPage() {
   }
 
   const handleProposeTask = () => {
-    if (!proposalForm.targetUserId || !proposalForm.taskName.trim()) {
-      toast.error('Select a member and enter a task name')
+    if (!proposalForm.taskName.trim()) {
+      toast.error('Enter a task name')
       return
     }
 
     const proposal = {
       community_id: id,
       from_user_id: user.id,
-      to_user_id: proposalForm.targetUserId,
       task_name: proposalForm.taskName.trim(),
       description: proposalForm.description.trim(),
       time_budget_min: proposalForm.time_budget_min,
-      status: 'pending'
+      status: 'pending',
+      accepted_by: [] // Track who has accepted
     }
 
     localStore.insert(TABLES.TASK_PROPOSALS, proposal)
 
     // Add activity message
-    const targetProfile = memberProfiles[proposalForm.targetUserId]
     localStore.insert(TABLES.COMMUNITY_MESSAGES, {
       community_id: id,
       user_id: user.id,
-      content: `proposed a task for ${targetProfile?.username || 'someone'}`,
+      content: `proposed a task: "${proposalForm.taskName.trim()}"`,
       message_type: 'proposal'
     })
 
     loadCommunity()
     setShowProposeTask(false)
-    setProposalForm({ targetUserId: '', taskName: '', description: '', time_budget_min: 30 })
-    toast.success('Task proposed!')
+    setProposalForm({ taskName: '', description: '', time_budget_min: 30 })
+    toast.success('Task proposed to the community!')
   }
 
   const handleAcceptProposal = (proposal) => {
-    // Create the track
+    // Create the track for this user
     const track = {
       user_id: user.id,
       name: proposal.task_name,
-      description: proposal.description || `Proposed by ${memberProfiles[proposal.from_user_id]?.username}`,
+      description: proposal.description || `Community task proposed by ${memberProfiles[proposal.from_user_id]?.username}`,
       intent: 'general',
       time_budget_min: proposal.time_budget_min,
       difficulty_pref: 3,
@@ -160,14 +158,17 @@ export default function CommunityDetailPage() {
 
     localStore.insert(TABLES.TRACKS, track)
 
-    // Update proposal status
-    localStore.update(TABLES.TASK_PROPOSALS, proposal.id, { status: 'accepted' })
+    // Track that this user accepted (proposal stays open for others)
+    const acceptedBy = proposal.accepted_by || []
+    localStore.update(TABLES.TASK_PROPOSALS, proposal.id, {
+      accepted_by: [...acceptedBy, user.id]
+    })
 
     // Add activity message
     localStore.insert(TABLES.COMMUNITY_MESSAGES, {
       community_id: id,
       user_id: user.id,
-      content: `accepted the task "${proposal.task_name}"`,
+      content: `accepted the community task "${proposal.task_name}"`,
       message_type: 'quest_created'
     })
 
@@ -175,10 +176,14 @@ export default function CommunityDetailPage() {
     toast.success('Task added to your tracks!')
   }
 
-  const handleDeclineProposal = (proposal) => {
-    localStore.update(TABLES.TASK_PROPOSALS, proposal.id, { status: 'declined' })
+  const handleDismissProposal = (proposal) => {
+    // Just hide it for this user by adding to dismissed list
+    const dismissedBy = proposal.dismissed_by || []
+    localStore.update(TABLES.TASK_PROPOSALS, proposal.id, {
+      dismissed_by: [...dismissedBy, user.id]
+    })
     loadCommunity()
-    toast.success('Proposal declined')
+    toast.success('Proposal hidden')
   }
 
   const scrollToBottom = () => {
@@ -302,8 +307,14 @@ export default function CommunityDetailPage() {
         {/* Tabs */}
         <div className="flex gap-1 mt-3">
           {['chat', 'activity', 'proposals', 'members'].map(tab => {
+            // Count proposals not yet accepted/dismissed by this user
             const pendingCount = tab === 'proposals'
-              ? proposals.filter(p => p.to_user_id === user.id && p.status === 'pending').length
+              ? proposals.filter(p =>
+                  p.status === 'pending' &&
+                  p.from_user_id !== user.id &&
+                  !(p.accepted_by || []).includes(user.id) &&
+                  !(p.dismissed_by || []).includes(user.id)
+                ).length
               : 0
             return (
               <button
@@ -478,15 +489,26 @@ export default function CommunityDetailPage() {
             Propose a Task
           </button>
 
-          {/* Pending Proposals for Me */}
-          {proposals.filter(p => p.to_user_id === user.id && p.status === 'pending').length > 0 && (
+          {/* Community Proposals - Available for everyone to accept */}
+          {proposals.filter(p =>
+            p.status === 'pending' &&
+            p.from_user_id !== user.id &&
+            !(p.accepted_by || []).includes(user.id) &&
+            !(p.dismissed_by || []).includes(user.id)
+          ).length > 0 && (
             <div className="mb-6">
-              <h3 className="text-sm font-semibold text-white mb-3">Pending for You</h3>
+              <h3 className="text-sm font-semibold text-white mb-3">Community Proposals</h3>
               <div className="space-y-3">
                 {proposals
-                  .filter(p => p.to_user_id === user.id && p.status === 'pending')
+                  .filter(p =>
+                    p.status === 'pending' &&
+                    p.from_user_id !== user.id &&
+                    !(p.accepted_by || []).includes(user.id) &&
+                    !(p.dismissed_by || []).includes(user.id)
+                  )
                   .map(proposal => {
                     const fromProfile = memberProfiles[proposal.from_user_id]
+                    const acceptedCount = (proposal.accepted_by || []).length
                     return (
                       <motion.div
                         key={proposal.id}
@@ -498,10 +520,11 @@ export default function CommunityDetailPage() {
                           <div>
                             <h4 className="font-medium text-white">{proposal.task_name}</h4>
                             <p className="text-xs text-dark-muted">
-                              From @{fromProfile?.username || 'Unknown'} • {proposal.time_budget_min} min
+                              Proposed by @{fromProfile?.username || 'Unknown'} • {proposal.time_budget_min} min
+                              {acceptedCount > 0 && ` • ${acceptedCount} accepted`}
                             </p>
                           </div>
-                          <Clock className="w-5 h-5 text-yellow-400" />
+                          <Target className="w-5 h-5 text-primary-400" />
                         </div>
                         {proposal.description && (
                           <p className="text-sm text-dark-muted mb-3">{proposal.description}</p>
@@ -515,11 +538,11 @@ export default function CommunityDetailPage() {
                             Accept
                           </button>
                           <button
-                            onClick={() => handleDeclineProposal(proposal)}
+                            onClick={() => handleDismissProposal(proposal)}
                             className="flex-1 btn-secondary py-2 text-sm"
                           >
                             <XCircle className="w-4 h-4" />
-                            Decline
+                            Dismiss
                           </button>
                         </div>
                       </motion.div>
@@ -537,7 +560,7 @@ export default function CommunityDetailPage() {
                 {proposals
                   .filter(p => p.from_user_id === user.id)
                   .map(proposal => {
-                    const toProfile = memberProfiles[proposal.to_user_id]
+                    const acceptedCount = (proposal.accepted_by || []).length
                     return (
                       <div
                         key={proposal.id}
@@ -545,15 +568,12 @@ export default function CommunityDetailPage() {
                       >
                         <div>
                           <p className="text-sm text-white">{proposal.task_name}</p>
-                          <p className="text-xs text-dark-muted">To @{toProfile?.username || 'Unknown'}</p>
+                          <p className="text-xs text-dark-muted">
+                            {acceptedCount} member{acceptedCount !== 1 ? 's' : ''} accepted
+                          </p>
                         </div>
-                        <span className={cn(
-                          "text-xs px-2 py-1 rounded-full",
-                          proposal.status === 'pending' && "bg-yellow-500/20 text-yellow-400",
-                          proposal.status === 'accepted' && "bg-green-500/20 text-green-400",
-                          proposal.status === 'declined' && "bg-red-500/20 text-red-400"
-                        )}>
-                          {proposal.status}
+                        <span className="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-400">
+                          active
                         </span>
                       </div>
                     )
@@ -566,7 +586,7 @@ export default function CommunityDetailPage() {
             <div className="text-center py-12">
               <Target className="w-12 h-12 text-dark-muted mx-auto mb-3" />
               <p className="text-dark-muted">No proposals yet</p>
-              <p className="text-xs text-dark-muted mt-1">Propose tasks to help your friends stay accountable!</p>
+              <p className="text-xs text-dark-muted mt-1">Propose tasks for the whole community!</p>
             </div>
           )}
         </div>
@@ -683,27 +703,11 @@ export default function CommunityDetailPage() {
                 </button>
               </div>
 
-              <div className="space-y-4">
-                {/* Select Member */}
-                <div>
-                  <label className="label">Propose to</label>
-                  <select
-                    className="input"
-                    value={proposalForm.targetUserId}
-                    onChange={(e) => setProposalForm({ ...proposalForm, targetUserId: e.target.value })}
-                  >
-                    <option value="">Select a member...</option>
-                    {members.filter(m => m.user_id !== user.id).map(member => {
-                      const memberProfile = memberProfiles[member.user_id]
-                      return (
-                        <option key={member.id} value={member.user_id}>
-                          @{memberProfile?.username || 'Unknown'}
-                        </option>
-                      )
-                    })}
-                  </select>
-                </div>
+              <p className="text-sm text-dark-muted mb-4">
+                Propose a task for the entire community. Members can choose to accept it.
+              </p>
 
+              <div className="space-y-4">
                 {/* Task Name */}
                 <div>
                   <label className="label">Task Name</label>

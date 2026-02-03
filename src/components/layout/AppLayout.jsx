@@ -1,12 +1,12 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom'
-import { Home, Target, BarChart3, Calendar, Settings, Users } from 'lucide-react'
+import { Home, Target, BarChart3, Compass, Users } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/tracks', icon: Target, label: 'Tracks' },
+  { path: '/journeys', icon: Compass, label: 'Journeys' },
   { path: '/stats', icon: BarChart3, label: 'Stats' },
-  { path: '/weekly', icon: Calendar, label: 'Weekly' },
   { path: '/community', icon: Users, label: 'Community' },
 ]
 

@@ -107,6 +107,19 @@ export default function QuestPage() {
     }
   }
 
+  // Broadcast activity to all communities user is a member of
+  const broadcastToCommunities = (content, messageType) => {
+    const memberships = localStore.query(TABLES.COMMUNITY_MEMBERS, m => m.user_id === user.id)
+    memberships.forEach(membership => {
+      localStore.insert(TABLES.COMMUNITY_MESSAGES, {
+        community_id: membership.community_id,
+        user_id: user.id,
+        content,
+        message_type: messageType
+      })
+    })
+  }
+
   const handleStartQuest = () => {
     // Update quest status
     const updated = localStore.update(TABLES.QUESTS, id, {
@@ -116,6 +129,10 @@ export default function QuestPage() {
     setQuest(updated)
     setQuestState('running')
     startTimer()
+
+    // Announce to communities
+    broadcastToCommunities(`started "${track?.name || quest?.title}"`, 'quest_started')
+
     toast.success('Quest started! Good luck!')
   }
 
@@ -174,6 +191,9 @@ export default function QuestPage() {
 
     // Update streaks
     updateStreaks()
+
+    // Announce to communities
+    broadcastToCommunities(`completed "${track?.name || quest?.title}" (+${xpReward} XP)`, 'quest_completed')
 
     // Celebration!
     confetti({
@@ -242,6 +262,9 @@ export default function QuestPage() {
       xp_earned: 0,
       used_strike: true
     })
+
+    // Announce strike to communities
+    broadcastToCommunities(`used a strike on "${track?.name || quest?.title}"`, 'streak')
 
     setShowStrikeConfirm(false)
 

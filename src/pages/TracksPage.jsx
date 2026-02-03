@@ -87,7 +87,7 @@ export default function TracksPage() {
     loadTracks()
   }
 
-  const maxTracks = profile?.is_pro ? 10 : 3
+  const maxTracks = 10
   const canCreateTrack = tracks.length < maxTracks
 
   if (loading) {
@@ -107,9 +107,6 @@ export default function TracksPage() {
             <h1 className="text-2xl font-display font-bold text-white">Tracks</h1>
             <p className="text-dark-muted text-sm">
               {tracks.length} of {maxTracks} tracks
-              {!profile?.is_pro && tracks.length >= 3 && (
-                <span className="text-primary-400 ml-1">(Upgrade for more)</span>
-              )}
             </p>
           </div>
           {canCreateTrack && (
@@ -303,24 +300,6 @@ export default function TracksPage() {
           </div>
         )}
 
-        {/* Upgrade prompt */}
-        {!profile?.is_pro && tracks.length >= 3 && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card mt-6 bg-gradient-to-br from-primary-900/50 to-purple-900/50 border-primary-500/30"
-          >
-            <h3 className="font-semibold text-white mb-2">
-              Need more tracks?
-            </h3>
-            <p className="text-dark-muted text-sm mb-3">
-              Upgrade to Pro for unlimited tracks, AI personalization, and more.
-            </p>
-            <Link to="/settings" className="btn-primary py-2 text-sm">
-              Upgrade to Pro
-            </Link>
-          </motion.div>
-        )}
       </main>
     </div>
   )

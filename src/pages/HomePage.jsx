@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Flame, Trophy, Shield, Plus, ChevronRight, Zap, Clock,
+  Flame, Trophy, Plus, ChevronRight, Zap, Clock,
   CheckCircle2, Circle, Sparkles, Settings, Skull
 } from 'lucide-react'
 import confetti from 'canvas-confetti'
@@ -106,10 +106,7 @@ export default function HomePage() {
           </div>
 
           {/* Stats row */}
-          <div className={cn(
-            "grid gap-3",
-            (profile?.strike_limit || 0) > 0 ? "grid-cols-4" : "grid-cols-3"
-          )}>
+          <div className="grid grid-cols-3 gap-3">
             {/* Streak */}
             <div className="card bg-dark-card/80 backdrop-blur-sm p-3 text-center">
               <div className="flex items-center justify-center gap-1 mb-1">
@@ -138,32 +135,19 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* Shields */}
+            {/* Strikes */}
             <div className="card bg-dark-card/80 backdrop-blur-sm p-3 text-center">
               <div className="flex items-center justify-center gap-1 mb-1">
-                <Shield className="w-5 h-5 text-cyan-400" />
+                <Skull className={cn(
+                  "w-5 h-5",
+                  (profile?.strikes || 0) > 0 ? "text-danger-light" : "text-dark-muted"
+                )} />
                 <span className="text-2xl font-bold text-white">
-                  {profile?.shields_available ?? 2}
+                  {profile?.strike_limit === 999 ? '∞' : `${profile?.strikes || 0}/${profile?.strike_limit || 3}`}
                 </span>
               </div>
-              <p className="text-xs text-dark-muted">Shields</p>
+              <p className="text-xs text-dark-muted">Strikes</p>
             </div>
-
-            {/* Strikes - only show if strike system is enabled */}
-            {(profile?.strike_limit || 0) > 0 && (
-              <div className="card bg-dark-card/80 backdrop-blur-sm p-3 text-center">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <Skull className={cn(
-                    "w-5 h-5",
-                    (profile?.strikes || 0) > 0 ? "text-danger-light" : "text-dark-muted"
-                  )} />
-                  <span className="text-2xl font-bold text-white">
-                    {profile?.strikes || 0}/{profile?.strike_limit}
-                  </span>
-                </div>
-                <p className="text-xs text-dark-muted">Strikes</p>
-              </div>
-            )}
           </div>
 
           {/* Rank progress bar */}

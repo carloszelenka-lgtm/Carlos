@@ -126,10 +126,10 @@ export default function CreateTrackPage() {
     try {
       // Check track limit
       const existingTracks = localStore.query(TABLES.TRACKS, t => t.user_id === user.id)
-      const maxTracks = profile?.is_pro ? 10 : 3
+      const maxTracks = 10
 
       if (existingTracks.length >= maxTracks) {
-        setError(`You've reached the maximum of ${maxTracks} tracks. ${!profile?.is_pro ? 'Upgrade to Pro for more.' : ''}`)
+        setError(`You've reached the maximum of ${maxTracks} tracks.`)
         setLoading(false)
         return
       }

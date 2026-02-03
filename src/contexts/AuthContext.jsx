@@ -97,8 +97,7 @@ export function AuthProvider({ children }) {
         style: 'balanced',
         xp: 0,
         rank: 'Novice',
-        shields_available: 2,
-        shields_used_this_week: 0,
+        strike_limit: 3,
         role: 'user',
         is_pro: false,
         ai_enabled: false
@@ -216,17 +215,6 @@ export function AuthProvider({ children }) {
     return 'Novice'
   }
 
-  const useShield = async () => {
-    if (!profile || profile.shields_available <= 0) {
-      return { error: { message: 'No shields available' } }
-    }
-
-    return updateProfile({
-      shields_available: profile.shields_available - 1,
-      shields_used_this_week: profile.shields_used_this_week + 1
-    })
-  }
-
   const value = {
     user,
     profile,
@@ -236,7 +224,6 @@ export function AuthProvider({ children }) {
     signOut,
     updateProfile,
     addXP,
-    useShield,
     fetchProfile,
     isLocalMode
   }
