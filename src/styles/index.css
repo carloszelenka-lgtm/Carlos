@@ -303,38 +303,31 @@
 .rank-bg-grandmaster { @apply bg-yellow-500/20; }
 .rank-bg-legend { @apply bg-pink-500/20; }
 
-/* Light mode specific overrides */
-html:not(.dark) {
-  .text-white {
-    color: var(--text-primary);
-  }
+/* Light mode specific overrides - using non-nested selectors */
+html:not(.dark) .text-white {
+  color: var(--text-primary);
+}
 
-  .text-dark-text {
-    color: var(--text-primary);
-  }
+html:not(.dark) .text-dark-text {
+  color: var(--text-primary);
+}
 
-  .text-dark-muted {
-    color: var(--text-muted);
-  }
+html:not(.dark) .text-dark-muted {
+  color: var(--text-muted);
+}
 
-  .bg-dark-bg {
-    background-color: var(--bg-primary);
-  }
+html:not(.dark) .bg-dark-bg {
+  background-color: var(--bg-primary);
+}
 
-  .bg-dark-surface {
-    background-color: var(--bg-surface);
-  }
+html:not(.dark) .bg-dark-surface {
+  background-color: var(--bg-surface);
+}
 
-  .bg-dark-card {
-    background-color: var(--bg-card);
-  }
+html:not(.dark) .bg-dark-card {
+  background-color: var(--bg-card);
+}
 
-  .border-dark-border {
-    border-color: var(--border-color);
-  }
-
-  /* Ensure contrast on light backgrounds */
-  .bg-dark-card\/80 {
-    background-color: rgba(241, 245, 249, 0.8);
-  }
+html:not(.dark) .border-dark-border {
+  border-color: var(--border-color);
 }
