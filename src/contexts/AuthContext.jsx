@@ -16,6 +16,12 @@ export function AuthProvider({ children }) {
       // Check for local user
       const localUser = localStore.getCurrentUser()
       if (localUser) {
+        // Migrate: ensure current user is in all_users list
+        const allUsers = localStore.get('all_users') || []
+        if (!allUsers.find(u => u.id === localUser.id)) {
+          localStore.set('all_users', [...allUsers, localUser])
+        }
+
         setUser(localUser)
         const profiles = localStore.query(TABLES.USERS_PROFILE, p => p.user_id === localUser.id)
         if (profiles.length > 0) {
@@ -74,19 +80,28 @@ export function AuthProvider({ children }) {
 
   const signUp = async ({ email, password, username }) => {
     if (isLocalMode) {
+      // Check if username exists
+      const existingUsername = localStore.query(TABLES.USERS_PROFILE, p => p.username === username)
+      if (existingUsername.length > 0) {
+        return { error: { message: 'Username already taken' } }
+      }
+
+      // Check if email already registered
+      const allUsers = localStore.get('all_users') || []
+      if (allUsers.find(u => u.email === email)) {
+        return { error: { message: 'Email already registered. Try signing in.' } }
+      }
+
       // Create local user
       const newUser = {
         id: crypto.randomUUID(),
         email,
+        password,
         created_at: new Date().toISOString()
       }
 
-      // Check if username exists
-      const existingUser = localStore.query(TABLES.USERS_PROFILE, p => p.username === username)
-      if (existingUser.length > 0) {
-        return { error: { message: 'Username already taken' } }
-      }
-
+      // Store in all users list and set as current
+      localStore.set('all_users', [...allUsers, newUser])
       localStore.setCurrentUser(newUser)
 
       // Create profile
@@ -114,6 +129,7 @@ export function AuthProvider({ children }) {
 
       setUser(newUser)
       setProfile(newProfile)
+      setLoading(false)
       return { data: { user: newUser }, error: null }
     }
 
@@ -147,18 +163,25 @@ export function AuthProvider({ children }) {
 
   const signIn = async ({ email, password }) => {
     if (isLocalMode) {
-      // Find user by email in profiles
-      const profiles = localStore.get(TABLES.USERS_PROFILE)
-      const user = localStore.getCurrentUser()
+      // Search all stored users by email
+      const allUsers = localStore.get('all_users') || []
+      const foundUser = allUsers.find(u => u.email === email)
 
-      if (user && user.email === email) {
-        const profile = profiles.find(p => p.user_id === user.id)
-        setUser(user)
-        setProfile(profile)
-        return { data: { user }, error: null }
+      if (!foundUser) {
+        return { error: { message: 'No account found with that email. Please sign up first.' } }
       }
 
-      return { error: { message: 'Invalid credentials. In demo mode, please sign up first.' } }
+      // Set as current user
+      localStore.setCurrentUser(foundUser)
+
+      // Find their profile
+      const profiles = localStore.query(TABLES.USERS_PROFILE, p => p.user_id === foundUser.id)
+      const foundProfile = profiles[0] || null
+
+      setUser(foundUser)
+      setProfile(foundProfile)
+      setLoading(false)
+      return { data: { user: foundUser }, error: null }
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
